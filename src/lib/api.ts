@@ -1,5 +1,4 @@
-const API_URL = import.meta.env.VITE_CRAMAI_API_URL || 'https://api.cramai.example.com';
-const API_KEY = import.meta.env.VITE_CRAMAI_API_KEY || '';
+import { supabase } from "@/integrations/supabase/client";
 
 interface ApiResponse<T> {
   data?: T;
@@ -8,24 +7,22 @@ interface ApiResponse<T> {
 
 async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  body: Record<string, unknown>
 ): Promise<ApiResponse<T>> {
   try {
-    const response = await fetch(`${API_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-API-Key': API_KEY,
-        ...options.headers,
-      },
+    const { data, error } = await supabase.functions.invoke('cramai-proxy', {
+      body: { endpoint, ...body },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || `HTTP error! status: ${response.status}`);
+    if (error) {
+      console.error('Edge function error:', error);
+      return { error: error.message || 'API request failed' };
     }
 
-    const data = await response.json();
+    if (data?.error) {
+      return { error: data.error };
+    }
+
     return { data };
   } catch (error) {
     console.error('API Error:', error);
@@ -106,10 +103,7 @@ export async function analyzeDocument(
   content: string,
   subject: string
 ): Promise<ApiResponse<AnalysisResult>> {
-  return apiRequest<AnalysisResult>('/api/analyze', {
-    method: 'POST',
-    body: JSON.stringify({ content, subject }),
-  });
+  return apiRequest<AnalysisResult>('/api/analyze', { content, subject });
 }
 
 export async function generateQuestions(params: {
@@ -118,30 +112,21 @@ export async function generateQuestions(params: {
   difficulty: 'easy' | 'medium' | 'hard' | 'mixed';
   types: string[];
 }): Promise<ApiResponse<Question[]>> {
-  return apiRequest<Question[]>('/api/questions/generate', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
+  return apiRequest<Question[]>('/api/questions/generate', params);
 }
 
 export async function runDiagnosticTest(
   content: string,
   subject: string
 ): Promise<ApiResponse<Question[]>> {
-  return apiRequest<Question[]>('/api/questions/diagnostic', {
-    method: 'POST',
-    body: JSON.stringify({ content, subject }),
-  });
+  return apiRequest<Question[]>('/api/questions/diagnostic', { content, subject });
 }
 
 export async function gradeAnswers(
   questions: Question[],
   userAnswers: Record<string, string>
 ): Promise<ApiResponse<GradeResult>> {
-  return apiRequest<GradeResult>('/api/questions/grade', {
-    method: 'POST',
-    body: JSON.stringify({ questions, userAnswers }),
-  });
+  return apiRequest<GradeResult>('/api/questions/grade', { questions, userAnswers });
 }
 
 export async function createStudyPlan(params: {
@@ -149,19 +134,13 @@ export async function createStudyPlan(params: {
   hoursUntilExam: number;
   weakTopics?: string[];
 }): Promise<ApiResponse<StudyPlan>> {
-  return apiRequest<StudyPlan>('/api/study-plan/create', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
+  return apiRequest<StudyPlan>('/api/study-plan/create', params);
 }
 
 export async function getLastMinuteReview(
   content: string
 ): Promise<ApiResponse<LastMinuteReview>> {
-  return apiRequest<LastMinuteReview>('/api/study-plan/last-minute-review', {
-    method: 'POST',
-    body: JSON.stringify({ content }),
-  });
+  return apiRequest<LastMinuteReview>('/api/study-plan/last-minute-review', { content });
 }
 
 export async function sendChatMessage(
@@ -169,38 +148,26 @@ export async function sendChatMessage(
   context: string,
   history: ChatMessage[]
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat', {
-    method: 'POST',
-    body: JSON.stringify({ message, context, history }),
-  });
+  return apiRequest<ChatResponse>('/api/chat', { message, context, history });
 }
 
 export async function explainConcept(
   concept: string,
   context: string
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/explain', {
-    method: 'POST',
-    body: JSON.stringify({ concept, context }),
-  });
+  return apiRequest<ChatResponse>('/api/chat/explain', { concept, context });
 }
 
 export async function getHint(
   problem: string,
   context: string
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/hint', {
-    method: 'POST',
-    body: JSON.stringify({ problem, context }),
-  });
+  return apiRequest<ChatResponse>('/api/chat/hint', { problem, context });
 }
 
 export async function solveStepByStep(
   problem: string,
   context: string
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/solve-step', {
-    method: 'POST',
-    body: JSON.stringify({ problem, context }),
-  });
+  return apiRequest<ChatResponse>('/api/chat/solve-step', { problem, context });
 }
