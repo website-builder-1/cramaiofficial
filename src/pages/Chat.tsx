@@ -49,6 +49,12 @@ export default function Chat() {
     const messageToSend = content || message.trim();
     if (!messageToSend) return;
 
+    // Validate minimum message length (CramAI requires at least 10 characters)
+    if (messageToSend.length < 10) {
+      toast.error('Please enter a longer message (at least 10 characters)');
+      return;
+    }
+
     const userMessage: ChatMessage = {
       role: 'user',
       content: messageToSend,
