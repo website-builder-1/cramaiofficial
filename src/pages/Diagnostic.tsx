@@ -14,7 +14,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type Question } from '@/lib/api';
+import { type Question, runDiagnosticTest } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
@@ -38,121 +38,21 @@ export default function Diagnostic() {
   const handleStart = async () => {
     setIsGenerating(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const { documentContent, subject } = useStudyStore.getState();
+    const response = await runDiagnosticTest(documentContent || '', subject || 'General');
 
-    // Mock diagnostic questions
-    const mockQuestions: Question[] = [
-      {
-        id: '1',
-        type: 'multiple-choice',
-        question: 'Which organelle is responsible for producing ATP through cellular respiration?',
-        options: ['Nucleus', 'Mitochondria', 'Ribosome', 'Golgi apparatus'],
-        correctAnswer: 'Mitochondria',
-        explanation: 'Mitochondria are the powerhouse of the cell, producing ATP through cellular respiration.',
-        difficulty: 'easy',
-        topic: 'Cell Biology'
-      },
-      {
-        id: '2',
-        type: 'multiple-choice',
-        question: 'What is the correct equation for photosynthesis?',
-        options: [
-          'C₆H₁₂O₆ + 6O₂ → 6CO₂ + 6H₂O',
-          '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂',
-          '6O₂ + C₆H₁₂O₆ → 6H₂O + 6CO₂',
-          '6H₂O + 6O₂ → C₆H₁₂O₆ + 6CO₂'
-        ],
-        correctAnswer: '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂',
-        explanation: 'Photosynthesis converts carbon dioxide and water into glucose and oxygen using light energy.',
-        difficulty: 'medium',
-        topic: 'Photosynthesis'
-      },
-      {
-        id: '3',
-        type: 'multiple-choice',
-        question: 'During which phase of the cell cycle does DNA replication occur?',
-        options: ['G1 phase', 'S phase', 'G2 phase', 'M phase'],
-        correctAnswer: 'S phase',
-        explanation: 'DNA synthesis (replication) occurs during the S (Synthesis) phase of interphase.',
-        difficulty: 'medium',
-        topic: 'Cell Cycle'
-      },
-      {
-        id: '4',
-        type: 'multiple-choice',
-        question: 'How many chromosomes are in a human somatic cell?',
-        options: ['23', '46', '92', '12'],
-        correctAnswer: '46',
-        explanation: 'Human somatic (body) cells are diploid with 46 chromosomes (23 pairs).',
-        difficulty: 'easy',
-        topic: 'Genetics'
-      },
-      {
-        id: '5',
-        type: 'multiple-choice',
-        question: 'Which process produces 4 haploid cells from one diploid cell?',
-        options: ['Mitosis', 'Meiosis', 'Binary fission', 'Cytokinesis'],
-        correctAnswer: 'Meiosis',
-        explanation: 'Meiosis involves two divisions that produce 4 genetically unique haploid cells for sexual reproduction.',
-        difficulty: 'medium',
-        topic: 'Cell Division'
-      },
-      {
-        id: '6',
-        type: 'multiple-choice',
-        question: 'What type of bond holds the two strands of DNA together?',
-        options: ['Covalent bonds', 'Ionic bonds', 'Hydrogen bonds', 'Peptide bonds'],
-        correctAnswer: 'Hydrogen bonds',
-        explanation: 'Hydrogen bonds between complementary base pairs (A-T and G-C) hold the two DNA strands together.',
-        difficulty: 'medium',
-        topic: 'DNA Structure'
-      },
-      {
-        id: '7',
-        type: 'multiple-choice',
-        question: 'Where does the light-dependent reaction of photosynthesis occur?',
-        options: ['Stroma', 'Thylakoid membrane', 'Cytoplasm', 'Mitochondria'],
-        correctAnswer: 'Thylakoid membrane',
-        explanation: 'Light-dependent reactions occur in the thylakoid membranes where chlorophyll captures light energy.',
-        difficulty: 'hard',
-        topic: 'Photosynthesis'
-      },
-      {
-        id: '8',
-        type: 'multiple-choice',
-        question: 'What is the function of ribosomes?',
-        options: ['DNA replication', 'Protein synthesis', 'Lipid synthesis', 'ATP production'],
-        correctAnswer: 'Protein synthesis',
-        explanation: 'Ribosomes are the sites of protein synthesis, translating mRNA into proteins.',
-        difficulty: 'easy',
-        topic: 'Cell Biology'
-      },
-      {
-        id: '9',
-        type: 'multiple-choice',
-        question: 'Which enzyme unwinds the DNA double helix during replication?',
-        options: ['DNA polymerase', 'Ligase', 'Helicase', 'Primase'],
-        correctAnswer: 'Helicase',
-        explanation: 'Helicase unwinds and separates the two strands of the DNA double helix.',
-        difficulty: 'hard',
-        topic: 'DNA Replication'
-      },
-      {
-        id: '10',
-        type: 'multiple-choice',
-        question: 'In which stage of mitosis do sister chromatids separate?',
-        options: ['Prophase', 'Metaphase', 'Anaphase', 'Telophase'],
-        correctAnswer: 'Anaphase',
-        explanation: 'During anaphase, sister chromatids are pulled apart to opposite poles of the cell.',
-        difficulty: 'medium',
-        topic: 'Cell Division'
-      },
-    ];
+    if (response.error) {
+      toast.error(response.error);
+      setIsGenerating(false);
+      return;
+    }
 
-    setQuestions(mockQuestions);
+    if (response.data) {
+      setQuestions(response.data);
+      toast.success('Diagnostic test ready! Good luck!');
+    }
+    
     setIsGenerating(false);
-    toast.success('Diagnostic test ready! Good luck!');
   };
 
   const handleAnswer = (answer: string) => {

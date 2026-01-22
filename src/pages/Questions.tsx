@@ -22,7 +22,7 @@ import {
   Trophy
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type Question } from '@/lib/api';
+import { type Question, generateQuestions, gradeAnswers } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -65,95 +65,74 @@ export default function Questions() {
     setIsGraded(false);
     setCurrentQuestion(0);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2500));
+    const response = await generateQuestions({
+      content: documentContent || '',
+      count: questionCount,
+      difficulty,
+      types: selectedTypes,
+    });
 
-    // Mock questions for demo
-    const mockQuestions: Question[] = [
-      {
-        id: '1',
-        type: 'multiple-choice',
-        question: 'What is the primary function of mitochondria in a cell?',
-        options: ['Protein synthesis', 'ATP production', 'DNA replication', 'Cell division'],
-        correctAnswer: 'ATP production',
-        explanation: 'Mitochondria are known as the powerhouse of the cell because they produce ATP through cellular respiration.',
-        difficulty: 'easy',
-        topic: 'Cell Biology'
-      },
-      {
-        id: '2',
-        type: 'true-false',
-        question: 'Photosynthesis occurs in the mitochondria of plant cells.',
-        options: ['True', 'False'],
-        correctAnswer: 'False',
-        explanation: 'Photosynthesis occurs in the chloroplasts, not mitochondria. Mitochondria are responsible for cellular respiration.',
-        difficulty: 'easy',
-        topic: 'Plant Biology'
-      },
-      {
-        id: '3',
-        type: 'multiple-choice',
-        question: 'Which of the following is NOT a product of photosynthesis?',
-        options: ['Oxygen', 'Glucose', 'Carbon dioxide', 'Water'],
-        correctAnswer: 'Carbon dioxide',
-        explanation: 'Carbon dioxide is a reactant in photosynthesis, not a product. The products are glucose and oxygen.',
-        difficulty: 'medium',
-        topic: 'Photosynthesis'
-      },
-      {
-        id: '4',
-        type: 'multiple-choice',
-        question: 'During which phase of mitosis do chromosomes line up at the cell\'s equator?',
-        options: ['Prophase', 'Metaphase', 'Anaphase', 'Telophase'],
-        correctAnswer: 'Metaphase',
-        explanation: 'During metaphase, chromosomes align at the metaphase plate (cell\'s equator) before being separated.',
-        difficulty: 'medium',
-        topic: 'Cell Division'
-      },
-      {
-        id: '5',
-        type: 'true-false',
-        question: 'DNA replication is a semi-conservative process.',
-        options: ['True', 'False'],
-        correctAnswer: 'True',
-        explanation: 'DNA replication is semi-conservative because each new DNA molecule contains one original strand and one newly synthesized strand.',
-        difficulty: 'medium',
-        topic: 'DNA Replication'
-      },
-    ];
+    if (response.error) {
+      toast.error(response.error);
+      setIsGenerating(false);
+      return;
+    }
 
-    setQuestions(mockQuestions.slice(0, questionCount > 5 ? 5 : questionCount));
-    setShowResults(true);
+    if (response.data) {
+      setQuestions(response.data);
+      setShowResults(true);
+      toast.success(`Generated ${response.data.length} practice questions!`);
+    }
+    
     setIsGenerating(false);
-    toast.success(`Generated ${mockQuestions.length} practice questions!`);
   };
 
   const handleAnswer = (questionId: string, answer: string) => {
     setUserAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
-  const handleGrade = () => {
-    let correct = 0;
-    const weakTopicsSet = new Set<string>();
+  const handleGrade = async () => {
+    const response = await gradeAnswers(questions, userAnswers);
 
-    questions.forEach(q => {
-      if (userAnswers[q.id] === q.correctAnswer) {
-        correct++;
+    if (response.error) {
+      // Fallback to local grading if API fails
+      let correct = 0;
+      const weakTopicsSet = new Set<string>();
+
+      questions.forEach(q => {
+        if (userAnswers[q.id] === q.correctAnswer) {
+          correct++;
+        } else {
+          weakTopicsSet.add(q.topic);
+        }
+      });
+
+      setWeakTopics(Array.from(weakTopicsSet));
+      setIsGraded(true);
+      
+      const percentage = Math.round((correct / questions.length) * 100);
+      if (percentage >= 80) {
+        toast.success(`Great job! You scored ${percentage}%!`);
+      } else if (percentage >= 60) {
+        toast.info(`You scored ${percentage}%. Keep practicing!`);
       } else {
-        weakTopicsSet.add(q.topic);
+        toast.warning(`You scored ${percentage}%. Review the weak topics and try again.`);
       }
-    });
+      return;
+    }
 
-    setWeakTopics(Array.from(weakTopicsSet));
-    setIsGraded(true);
-    
-    const percentage = Math.round((correct / questions.length) * 100);
-    if (percentage >= 80) {
-      toast.success(`Great job! You scored ${percentage}%!`);
-    } else if (percentage >= 60) {
-      toast.info(`You scored ${percentage}%. Keep practicing!`);
-    } else {
-      toast.warning(`You scored ${percentage}%. Review the weak topics and try again.`);
+    if (response.data) {
+      setWeakTopics(response.data.weakTopics);
+      setIsGraded(true);
+      
+      const percentage = response.data.percentage;
+      if (percentage >= 80) {
+        toast.success(`Great job! You scored ${percentage}%!`);
+      } else if (percentage >= 60) {
+        toast.info(`You scored ${percentage}%. Keep practicing!`);
+      } else {
+        toast.warning(`You scored ${percentage}%. Review the weak topics and try again.`);
+      }
     }
   };
 

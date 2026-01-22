@@ -15,7 +15,7 @@ import {
   Zap
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type StudyPlan, type LastMinuteReview } from '@/lib/api';
+import { type StudyPlan, type LastMinuteReview, createStudyPlan, getLastMinuteReview } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -31,35 +31,25 @@ export default function StudyPlanPage() {
   const handleGeneratePlan = async () => {
     setIsGenerating(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Mock study plan
-    const mockPlan: StudyPlan = {
-      id: '1',
+    const response = await createStudyPlan({
+      content: documentContent || '',
       hoursUntilExam,
-      schedule: [
-        { hour: 1, topic: 'Cell Structure and Function', activity: 'Review notes and key definitions', isBreak: false, completed: false },
-        { hour: 2, topic: 'Cell Structure and Function', activity: 'Practice questions on cell organelles', isBreak: false, completed: false },
-        { hour: 3, topic: 'Break', activity: 'Take a 15-minute break. Stretch and hydrate!', isBreak: true, completed: false },
-        { hour: 4, topic: 'Photosynthesis', activity: 'Study the photosynthesis equation and light reactions', isBreak: false, completed: false },
-        { hour: 5, topic: 'Photosynthesis', activity: 'Practice drawing the process and answering questions', isBreak: false, completed: false },
-        { hour: 6, topic: 'Break', activity: 'Lunch break. Eat something nutritious!', isBreak: true, completed: false },
-        { hour: 7, topic: 'DNA & Genetics', activity: 'Review DNA structure, replication, and transcription', isBreak: false, completed: false },
-        { hour: 8, topic: 'Final Review', activity: 'Quick review of all topics, focus on weak areas', isBreak: false, completed: false },
-      ].slice(0, hoursUntilExam),
-      tips: [
-        'Use active recall instead of passive reading',
-        'Take short breaks every 25-30 minutes',
-        'Stay hydrated and avoid heavy meals',
-        'Get at least 6-7 hours of sleep before the exam'
-      ]
-    };
+      weakTopics: [],
+    });
 
-    setLocalPlan(mockPlan);
-    setStudyPlan(mockPlan);
+    if (response.error) {
+      toast.error(response.error);
+      setIsGenerating(false);
+      return;
+    }
+
+    if (response.data) {
+      setLocalPlan(response.data);
+      setStudyPlan(response.data);
+      toast.success('Study plan generated!');
+    }
+    
     setIsGenerating(false);
-    toast.success('Study plan generated!');
   };
 
   const handleToggleComplete = (hour: number) => {
@@ -78,38 +68,20 @@ export default function StudyPlanPage() {
   const handleGenerateReview = async () => {
     setIsGeneratingReview(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const response = await getLastMinuteReview(documentContent || '');
 
-    const mockReview: LastMinuteReview = {
-      keyPoints: [
-        'Mitochondria produces ATP through cellular respiration',
-        'Chloroplasts are the site of photosynthesis in plant cells',
-        'DNA replication is semi-conservative',
-        'Meiosis produces 4 haploid cells, mitosis produces 2 diploid cells'
-      ],
-      mustKnow: [
-        'Cell membrane structure (phospholipid bilayer)',
-        'Stages of mitosis: Prophase → Metaphase → Anaphase → Telophase',
-        'Photosynthesis equation: 6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂',
-        'Difference between DNA and RNA'
-      ],
-      quickFormulas: [
-        'ATP → ADP + P + Energy',
-        '6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂',
-        'DNA: A-T, G-C base pairing'
-      ],
-      commonMistakes: [
-        'Confusing mitochondria with chloroplasts',
-        'Mixing up mitosis and meiosis',
-        'Forgetting that DNA replication happens in S phase'
-      ],
-      confidenceBooster: "You've studied hard and you know this material. Trust your preparation, read each question carefully, and you've got this! 💪"
-    };
+    if (response.error) {
+      toast.error(response.error);
+      setIsGeneratingReview(false);
+      return;
+    }
 
-    setLastMinuteReview(mockReview);
+    if (response.data) {
+      setLastMinuteReview(response.data);
+      toast.success('Last-minute review generated!');
+    }
+    
     setIsGeneratingReview(false);
-    toast.success('Last-minute review generated!');
   };
 
   const completedCount = localPlan?.schedule.filter(s => s.completed).length || 0;
