@@ -1,0 +1,302 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { FileUpload } from '@/components/FileUpload';
+import { LoadingCard } from '@/components/LoadingSpinner';
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { 
+  FileText, 
+  BookOpen, 
+  Clock, 
+  Lightbulb,
+  ArrowRight,
+  Sparkles,
+  CheckCircle2
+} from 'lucide-react';
+import { useStudyStore } from '@/lib/store';
+import { analyzeDocument, type AnalysisResult } from '@/lib/api';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+
+const subjects = [
+  'Biology', 'Chemistry', 'Physics', 'Math', 'History', 
+  'Psychology', 'Economics', 'Computer Science', 'Literature', 'Other'
+];
+
+export default function Analyzer() {
+  const navigate = useNavigate();
+  const { 
+    documentContent, 
+    setDocumentContent, 
+    subject, 
+    setSubject,
+    setAnalysisResult,
+    analysisResult
+  } = useStudyStore();
+  
+  const [textInput, setTextInput] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [localResult, setLocalResult] = useState<AnalysisResult | null>(analysisResult);
+
+  const handleFileContent = (content: string) => {
+    setDocumentContent(content);
+    setTextInput('');
+  };
+
+  const handleTextPaste = (value: string) => {
+    setTextInput(value);
+    setDocumentContent(value);
+  };
+
+  const handleAnalyze = async () => {
+    const content = documentContent || textInput;
+    
+    if (!content.trim()) {
+      toast.error('Please upload a file or paste your study material');
+      return;
+    }
+
+    if (!subject) {
+      toast.error('Please select a subject');
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setDocumentContent(content);
+
+    // Simulate API call for demo
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Mock result for demo
+    const mockResult: AnalysisResult = {
+      keyTopics: [
+        'Cell Structure and Function',
+        'Photosynthesis Process',
+        'DNA Replication',
+        'Mitosis and Meiosis',
+        'Genetic Inheritance'
+      ],
+      definitions: [
+        { term: 'Mitochondria', definition: 'The powerhouse of the cell, responsible for producing ATP through cellular respiration.' },
+        { term: 'Chloroplast', definition: 'Organelle in plant cells where photosynthesis occurs.' },
+        { term: 'DNA', definition: 'Deoxyribonucleic acid, carries genetic information.' },
+      ],
+      concepts: [
+        'Energy flow in biological systems',
+        'Cell division cycles',
+        'Protein synthesis pathway',
+        'Membrane transport mechanisms'
+      ],
+      formulas: [
+        '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂ (Photosynthesis)',
+        'ATP → ADP + P + Energy',
+      ],
+      estimatedStudyTime: 4,
+      summary: 'This material covers fundamental cell biology concepts including cellular structures, energy processes, and genetic mechanisms. Focus on understanding the relationships between structure and function.'
+    };
+
+    setLocalResult(mockResult);
+    setAnalysisResult(mockResult);
+    setIsAnalyzing(false);
+    toast.success('Analysis complete!');
+  };
+
+  const handleGenerateStudyPlan = () => {
+    navigate('/study-plan');
+  };
+
+  return (
+    <div className="min-h-screen py-8">
+      <div className="container px-4 max-w-4xl">
+        {/* Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
+            <FileText className="w-4 h-4 text-primary" />
+            <span className="text-sm font-medium">Document Analyzer</span>
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold mb-3">
+            Analyze Your <span className="gradient-text">Study Material</span>
+          </h1>
+          <p className="text-muted-foreground max-w-xl mx-auto">
+            Upload your notes, textbook chapters, or paste text. Our AI will extract key concepts, 
+            definitions, and create a personalized study roadmap.
+          </p>
+        </div>
+
+        {/* Upload Section */}
+        <div className="glass-card rounded-xl p-6 md:p-8 mb-8">
+          <div className="space-y-6">
+            <FileUpload 
+              onFileContent={handleFileContent}
+              isLoading={isAnalyzing}
+            />
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-border" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-card px-4 text-sm text-muted-foreground">or paste text</span>
+              </div>
+            </div>
+
+            <Textarea
+              placeholder="Paste your study material here..."
+              value={textInput}
+              onChange={(e) => handleTextPaste(e.target.value)}
+              className="min-h-[150px] resize-none"
+              disabled={isAnalyzing}
+            />
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Select value={subject} onValueChange={setSubject} disabled={isAnalyzing}>
+                <SelectTrigger className="sm:w-[200px]">
+                  <SelectValue placeholder="Select subject" />
+                </SelectTrigger>
+                <SelectContent>
+                  {subjects.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button 
+                onClick={handleAnalyze} 
+                disabled={isAnalyzing || (!documentContent && !textInput) || !subject}
+                className="flex-1 sm:flex-none gap-2"
+                variant="hero"
+                size="lg"
+              >
+                {isAnalyzing ? (
+                  <>Analyzing...</>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Analyze Material
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Loading State */}
+        {isAnalyzing && (
+          <LoadingCard message="Analyzing your study material..." />
+        )}
+
+        {/* Results */}
+        {localResult && !isAnalyzing && (
+          <div className="space-y-6 animate-slide-up">
+            {/* Summary Card */}
+            <div className="glass-card rounded-xl p-6">
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-12 h-12 rounded-xl gradient-bg flex items-center justify-center shrink-0">
+                  <Lightbulb className="w-6 h-6 text-primary-foreground" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold mb-1">Analysis Summary</h3>
+                  <p className="text-muted-foreground">{localResult.summary}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="w-4 h-4 text-primary" />
+                <span className="text-muted-foreground">
+                  Estimated study time: <strong className="text-foreground">{localResult.estimatedStudyTime} hours</strong>
+                </span>
+              </div>
+            </div>
+
+            {/* Key Topics */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-primary" />
+                Key Topics ({localResult.keyTopics.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {localResult.keyTopics.map((topic, i) => (
+                  <span 
+                    key={i}
+                    className="px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-sm font-medium"
+                  >
+                    {topic}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Definitions */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">
+                Important Definitions ({localResult.definitions.length})
+              </h3>
+              <div className="space-y-4">
+                {localResult.definitions.map((def, i) => (
+                  <div key={i} className="border-l-2 border-primary pl-4">
+                    <p className="font-semibold text-foreground">{def.term}</p>
+                    <p className="text-sm text-muted-foreground">{def.definition}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Key Concepts */}
+            <div className="glass-card rounded-xl p-6">
+              <h3 className="text-lg font-semibold mb-4">Key Concepts</h3>
+              <div className="space-y-2">
+                {localResult.concepts.map((concept, i) => (
+                  <div key={i} className="flex items-start gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+                    <span className="text-muted-foreground">{concept}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Formulas */}
+            {localResult.formulas.length > 0 && (
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-4">Formulas & Equations</h3>
+                <div className="space-y-2">
+                  {localResult.formulas.map((formula, i) => (
+                    <div key={i} className="p-3 bg-muted rounded-lg font-mono text-sm">
+                      {formula}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <Button 
+                onClick={handleGenerateStudyPlan}
+                variant="hero"
+                size="lg"
+                className="gap-2 flex-1"
+              >
+                Generate Study Plan
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+              <Button 
+                onClick={() => navigate('/questions')}
+                variant="outline"
+                size="lg"
+                className="gap-2 flex-1"
+              >
+                <BookOpen className="w-4 h-4" />
+                Practice Questions
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
