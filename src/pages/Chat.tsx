@@ -13,7 +13,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type ChatMessage } from '@/lib/api';
+import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +45,7 @@ export default function Chat() {
     scrollToBottom();
   }, [chatHistory]);
 
-  const handleSend = async (content?: string) => {
+  const handleSend = async (content?: string, actionType?: string) => {
     const messageToSend = content || message.trim();
     if (!messageToSend) return;
 
@@ -58,27 +58,35 @@ export default function Chat() {
     setMessage('');
     setIsLoading(true);
 
-    // Simulate API response
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    let response;
+    const context = documentContent || '';
 
-    // Generate mock response based on question
-    let response = '';
-    if (messageToSend.toLowerCase().includes('mitosis') && messageToSend.toLowerCase().includes('meiosis')) {
-      response = "Great question! Here's the key difference:\n\n**Mitosis:**\n- Produces 2 identical daughter cells\n- Cells are diploid (2n)\n- Used for growth and repair\n- One division cycle\n\n**Meiosis:**\n- Produces 4 genetically different cells\n- Cells are haploid (n)\n- Used for sexual reproduction\n- Two division cycles (Meiosis I and II)\n\nThink of it this way: Mitosis makes copies, Meiosis makes variety! 🧬";
-    } else if (messageToSend.toLowerCase().includes('photosynthesis')) {
-      response = "Photosynthesis is how plants make food! 🌱\n\n**Simple Explanation:**\nPlants take in sunlight, water, and carbon dioxide, then convert them into glucose (sugar) and oxygen.\n\n**The Equation:**\n`6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂`\n\n**Two Main Stages:**\n1. **Light Reactions** (in thylakoids): Capture sunlight, split water, make ATP\n2. **Calvin Cycle** (in stroma): Use ATP to build glucose\n\nRemember: It's the opposite of cellular respiration!";
-    } else if (messageToSend.toLowerCase().includes('dna replication')) {
-      response = "DNA Replication - Here's how cells copy their genetic material! 🧪\n\n**Key Steps:**\n1. **Helicase** unwinds the double helix\n2. **Primase** adds RNA primers\n3. **DNA Polymerase** adds new nucleotides (5' to 3' direction)\n4. **Ligase** joins the fragments\n\n**Important Concept:**\nIt's **semi-conservative** - each new DNA molecule has one old strand and one new strand.\n\n**Leading vs Lagging Strand:**\n- Leading: Continuous synthesis\n- Lagging: Okazaki fragments\n\nNeed me to explain any step in more detail?";
+    // Use the appropriate API based on action type
+    if (actionType === 'explain') {
+      response = await explainConcept(messageToSend, context);
+    } else if (actionType === 'hint') {
+      response = await getHint(messageToSend, context);
+    } else if (actionType === 'solve') {
+      response = await solveStepByStep(messageToSend, context);
     } else {
-      response = "That's a great question! Based on your study material, here's what you need to know:\n\nThis topic relates to fundamental biological concepts. The key points are:\n\n1. **Understanding the basics** - Start with the core definitions\n2. **Making connections** - See how this relates to other topics\n3. **Practice application** - Try applying this to practice problems\n\nWould you like me to elaborate on any specific aspect, or shall we try some practice questions on this topic? 📚";
+      response = await sendChatMessage(messageToSend, context, chatHistory);
     }
 
-    const assistantMessage: ChatMessage = {
-      role: 'assistant',
-      content: response,
-      timestamp: new Date(),
-    };
-    addChatMessage(assistantMessage);
+    if (response.error) {
+      toast.error(response.error);
+      setIsLoading(false);
+      return;
+    }
+
+    if (response.data) {
+      const assistantMessage: ChatMessage = {
+        role: 'assistant',
+        content: response.data.message,
+        timestamp: new Date(),
+      };
+      addChatMessage(assistantMessage);
+    }
+    
     setIsLoading(false);
   };
 

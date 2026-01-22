@@ -70,41 +70,21 @@ export default function Analyzer() {
     setIsAnalyzing(true);
     setDocumentContent(content);
 
-    // Simulate API call for demo
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    const response = await analyzeDocument(content, subject);
     
-    // Mock result for demo
-    const mockResult: AnalysisResult = {
-      keyTopics: [
-        'Cell Structure and Function',
-        'Photosynthesis Process',
-        'DNA Replication',
-        'Mitosis and Meiosis',
-        'Genetic Inheritance'
-      ],
-      definitions: [
-        { term: 'Mitochondria', definition: 'The powerhouse of the cell, responsible for producing ATP through cellular respiration.' },
-        { term: 'Chloroplast', definition: 'Organelle in plant cells where photosynthesis occurs.' },
-        { term: 'DNA', definition: 'Deoxyribonucleic acid, carries genetic information.' },
-      ],
-      concepts: [
-        'Energy flow in biological systems',
-        'Cell division cycles',
-        'Protein synthesis pathway',
-        'Membrane transport mechanisms'
-      ],
-      formulas: [
-        '6CO₂ + 6H₂O → C₆H₁₂O₆ + 6O₂ (Photosynthesis)',
-        'ATP → ADP + P + Energy',
-      ],
-      estimatedStudyTime: 4,
-      summary: 'This material covers fundamental cell biology concepts including cellular structures, energy processes, and genetic mechanisms. Focus on understanding the relationships between structure and function.'
-    };
+    if (response.error) {
+      toast.error(response.error);
+      setIsAnalyzing(false);
+      return;
+    }
 
-    setLocalResult(mockResult);
-    setAnalysisResult(mockResult);
+    if (response.data) {
+      setLocalResult(response.data);
+      setAnalysisResult(response.data);
+      toast.success('Analysis complete!');
+    }
+    
     setIsAnalyzing(false);
-    toast.success('Analysis complete!');
   };
 
   const handleGenerateStudyPlan = () => {
