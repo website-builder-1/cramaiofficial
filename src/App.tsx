@@ -12,7 +12,7 @@ import Chat from "./pages/Chat";
 import Diagnostic from "./pages/Diagnostic";
 import Flashcards from "./pages/Flashcards";
 import Summary from "./pages/Summary";
-import ConceptMap from "./pages/ConceptMap";
+
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,7 +35,7 @@ const App = () => (
               <Route path="/diagnostic" element={<Diagnostic />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/summary" element={<Summary />} />
-              <Route path="/concept-map" element={<ConceptMap />} />
+              
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

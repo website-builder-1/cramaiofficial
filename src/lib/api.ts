@@ -190,11 +190,6 @@ export interface SummaryResult {
   keyTerms: { term: string; definition: string }[];
 }
 
-export interface ConceptMap {
-  nodes: { id: string; label: string; group: string }[];
-  edges: { from: string; to: string; label: string }[];
-}
-
 export async function generateFlashcards(
   content: string,
   count = 15,
@@ -206,10 +201,4 @@ export async function generateSummary(
   content: string,
 ): Promise<ApiResponse<SummaryResult>> {
   return apiRequest<SummaryResult>('/api/summary/generate', { content });
-}
-
-export async function generateConceptMap(
-  content: string,
-): Promise<ApiResponse<ConceptMap>> {
-  return apiRequest<ConceptMap>('/api/concept-map/generate', { content });
 }

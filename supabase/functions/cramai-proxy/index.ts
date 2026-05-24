@@ -205,17 +205,6 @@ async function handleEndpoint(
       });
     }
 
-    case '/api/concept-map/generate': {
-      const content = truncate(body.content);
-      return await callAIJSON({
-        apiKey,
-        model: MODEL_STRUCTURED,
-        system: 'You build concept maps showing how ideas connect. Return ONLY valid JSON.',
-        user: `Material:\n${content}\n\nIdentify 6-12 key concepts and the relationships between them.\n\nReturn JSON:\n{\n  "nodes": [{"id": string, "label": string, "group": string}],\n  "edges": [{"from": string, "to": string, "label": string}]\n}`,
-        maxTokens: 2000,
-      });
-    }
-
     case '/api/chat':
     case '/api/chat/explain':
     case '/api/chat/hint':
