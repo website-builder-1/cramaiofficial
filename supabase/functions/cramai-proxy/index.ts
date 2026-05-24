@@ -247,7 +247,7 @@ async function handleEndpoint(
         (historyStr ? `Recent conversation:\n${historyStr}\n\n` : '') +
         userMsg;
 
-      const out = await callHF({
+      const out = await callAI({
         apiKey,
         model: MODEL_CHAT,
         system,
@@ -268,9 +268,9 @@ serve(async (req) => {
   }
 
   try {
-    const HF_API_KEY = Deno.env.get('HUGGINGFACE_API_KEY');
-    if (!HF_API_KEY) {
-      return jsonResponse({ error: 'Hugging Face API key not configured' });
+    const AI_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!AI_API_KEY) {
+      return jsonResponse({ error: 'AI is not configured (missing LOVABLE_API_KEY).' });
     }
 
     const parsedBody = await req.json().catch(() => null);
@@ -284,8 +284,8 @@ serve(async (req) => {
       return jsonResponse({ error: 'Missing endpoint parameter' });
     }
 
-    console.log(`HF proxy handling: ${endpointStr}`);
-    const data = await handleEndpoint(endpointStr, body as Record<string, unknown>, HF_API_KEY);
+    console.log(`AI proxy handling: ${endpointStr}`);
+    const data = await handleEndpoint(endpointStr, body as Record<string, unknown>, AI_API_KEY);
     return jsonResponse(data);
   } catch (error) {
     console.error('Proxy error:', error);
