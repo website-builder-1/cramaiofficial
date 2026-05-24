@@ -171,3 +171,43 @@ export async function solveStepByStep(
 ): Promise<ApiResponse<ChatResponse>> {
   return apiRequest<ChatResponse>('/api/chat/solve-step', { problem, context });
 }
+
+// New features
+export interface Flashcard {
+  id: string;
+  front: string;
+  back: string;
+  topic: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface SummaryResult {
+  tldr: string;
+  bulletSummary: string[];
+  cheatSheet: string[];
+  keyTerms: { term: string; definition: string }[];
+}
+
+export interface ConceptMap {
+  nodes: { id: string; label: string; group: string }[];
+  edges: { from: string; to: string; label: string }[];
+}
+
+export async function generateFlashcards(
+  content: string,
+  count = 15,
+): Promise<ApiResponse<{ cards: Flashcard[] }>> {
+  return apiRequest<{ cards: Flashcard[] }>('/api/flashcards/generate', { content, count });
+}
+
+export async function generateSummary(
+  content: string,
+): Promise<ApiResponse<SummaryResult>> {
+  return apiRequest<SummaryResult>('/api/summary/generate', { content });
+}
+
+export async function generateConceptMap(
+  content: string,
+): Promise<ApiResponse<ConceptMap>> {
+  return apiRequest<ConceptMap>('/api/concept-map/generate', { content });
+}
