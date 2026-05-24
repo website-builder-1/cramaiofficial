@@ -12,7 +12,10 @@ import {
   ArrowRight,
   Zap,
   Brain,
-  Clock
+  Clock,
+  Layers,
+  ScrollText,
+  Network
 } from 'lucide-react';
 import heroBg from '@/assets/hero-bg.jpg';
 
@@ -36,6 +39,21 @@ const features = [
     icon: MessageCircle,
     title: 'AI Tutor Chat',
     description: 'Ask questions, get explanations, and receive step-by-step solutions instantly.',
+  },
+  {
+    icon: Layers,
+    title: 'Smart Flashcards',
+    description: 'AI-generated flashcards with flip-to-reveal answers and quick spaced review.',
+  },
+  {
+    icon: ScrollText,
+    title: 'Summary & Cheat Sheet',
+    description: 'One-click TL;DR, bullet summary, and exam-ready cheat sheet from your notes.',
+  },
+  {
+    icon: Network,
+    title: 'Concept Map',
+    description: 'Visualize how ideas connect and click any node for an instant explanation.',
   },
 ];
 
