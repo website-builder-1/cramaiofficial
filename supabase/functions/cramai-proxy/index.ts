@@ -24,7 +24,7 @@ async function callAI(opts: {
   apiKey: string;
   model: string;
   system: string;
-  user: string;
+  user: string | Array<Record<string, unknown>>;
   json?: boolean;
   maxTokens?: number;
 }) {
@@ -112,17 +112,27 @@ async function handleEndpoint(
       const subject = asNonEmptyString(body.subject) || 'General';
       const examLevel = asNonEmptyString(body.examLevel);
       const examBoard = asNonEmptyString(body.examBoard);
+      const images = Array.isArray(body.images)
+        ? (body.images as unknown[]).filter((x): x is string => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6)
+        : [];
       const contextLine = [
         `Subject: ${subject}`,
         examLevel ? `Exam level: ${examLevel}` : null,
         examBoard ? `Exam board / syllabus: ${examBoard}` : null,
       ].filter(Boolean).join('\n');
+      const textPrompt = `${contextLine}\n\nMaterial:\n${content || '(no pasted text — extract everything from the attached image(s))'}\n\nReturn JSON with this exact shape:\n{\n  "keyTopics": string[],\n  "definitions": [{"term": string, "definition": string}],\n  "concepts": string[],\n  "formulas": string[],\n  "estimatedStudyTime": number (minutes),\n  "summary": string\n}`;
+      const userPayload: string | Array<Record<string, unknown>> = images.length
+        ? [
+            { type: 'text', text: textPrompt },
+            ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+          ]
+        : textPrompt;
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an expert exam-prep tutor. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.',
-        user: `${contextLine}\n\nMaterial:\n${content}\n\nReturn JSON with this exact shape:\n{\n  "keyTopics": string[],\n  "definitions": [{"term": string, "definition": string}],\n  "concepts": string[],\n  "formulas": string[],\n  "estimatedStudyTime": number (minutes),\n  "summary": string\n}`,
+          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.',
+        user: userPayload,
       });
     }
 

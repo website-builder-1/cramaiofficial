@@ -7,16 +7,20 @@ import { toast } from 'sonner';
 
 interface FileUploadProps {
   onFileContent: (content: string, fileName: string) => void;
+  onImageContent?: (dataUrl: string, fileName: string) => void;
   isLoading?: boolean;
   acceptedTypes?: string[];
   maxSize?: number;
+  acceptImages?: boolean;
 }
 
 export function FileUpload({
   onFileContent,
+  onImageContent,
   isLoading = false,
   acceptedTypes = ['.pdf', '.docx', '.txt'],
   maxSize = 10 * 1024 * 1024, // 10MB
+  acceptImages = false,
 }: FileUploadProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -44,6 +48,15 @@ export function FileUpload({
     });
   };
 
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
       const file = acceptedFiles[0];
@@ -54,19 +67,26 @@ export function FileUpload({
         return;
       }
 
-      setUploadedFile(file);
       setUploadProgress(0);
 
       try {
-        const content = await readFileContent(file);
-        onFileContent(content, file.name);
-        toast.success(`${file.name} uploaded successfully!`);
+        if (acceptImages && file.type.startsWith('image/')) {
+          const dataUrl = await readFileAsDataURL(file);
+          onImageContent?.(dataUrl, file.name);
+          toast.success(`${file.name} added!`);
+          // Don't store as uploadedFile so the user can keep adding images/text
+        } else {
+          setUploadedFile(file);
+          const content = await readFileContent(file);
+          onFileContent(content, file.name);
+          toast.success(`${file.name} uploaded successfully!`);
+        }
       } catch (error) {
         toast.error('Failed to read file. Please try again.');
         setUploadedFile(null);
       }
     },
-    [maxSize, onFileContent]
+    [maxSize, onFileContent, onImageContent, acceptImages]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -75,6 +95,14 @@ export function FileUpload({
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
       'text/plain': ['.txt'],
+      ...(acceptImages
+        ? {
+            'image/png': ['.png'],
+            'image/jpeg': ['.jpg', '.jpeg'],
+            'image/webp': ['.webp'],
+            'image/gif': ['.gif'],
+          }
+        : {}),
     },
     maxFiles: 1,
     disabled: isLoading,
@@ -133,11 +161,11 @@ export function FileUpload({
                   {isDragActive ? 'Drop your file here' : 'Drag & drop your study material'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  or click to browse
+                  or click to browse{acceptImages ? ' — you can also paste images (⌘/Ctrl+V)' : ''}
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Supports: PDF, DOCX, TXT (Max {maxSize / (1024 * 1024)}MB)
+                Supports: PDF, DOCX, TXT{acceptImages ? ', PNG, JPG, WEBP' : ''} (Max {maxSize / (1024 * 1024)}MB)
               </p>
             </>
           )}
