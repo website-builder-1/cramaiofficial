@@ -110,12 +110,19 @@ async function handleEndpoint(
     case '/api/analyze': {
       const content = truncate(body.content);
       const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel);
+      const examBoard = asNonEmptyString(body.examBoard);
+      const contextLine = [
+        `Subject: ${subject}`,
+        examLevel ? `Exam level: ${examLevel}` : null,
+        examBoard ? `Exam board / syllabus: ${examBoard}` : null,
+      ].filter(Boolean).join('\n');
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an expert study assistant. Analyze the provided study material and return ONLY valid JSON matching the requested schema. No prose, no markdown.',
-        user: `Subject: ${subject}\n\nMaterial:\n${content}\n\nReturn JSON with this exact shape:\n{\n  "keyTopics": string[],\n  "definitions": [{"term": string, "definition": string}],\n  "concepts": string[],\n  "formulas": string[],\n  "estimatedStudyTime": number (minutes),\n  "summary": string\n}`,
+          'You are an expert exam-prep tutor. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.',
+        user: `${contextLine}\n\nMaterial:\n${content}\n\nReturn JSON with this exact shape:\n{\n  "keyTopics": string[],\n  "definitions": [{"term": string, "definition": string}],\n  "concepts": string[],\n  "formulas": string[],\n  "estimatedStudyTime": number (minutes),\n  "summary": string\n}`,
       });
     }
 
