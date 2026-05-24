@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { FileUpload } from '@/components/FileUpload';
@@ -17,7 +17,9 @@ import {
   Lightbulb,
   ArrowRight,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  X,
+  ImageIcon,
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { analyzeDocument, type AnalysisResult } from '@/lib/api';
@@ -74,6 +76,45 @@ export default function Analyzer() {
   const [textInput, setTextInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [localResult, setLocalResult] = useState<AnalysisResult | null>(analysisResult);
+  const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
+
+  const addImage = (dataUrl: string, name: string) => {
+    setImages((prev) => {
+      if (prev.length >= 6) {
+        toast.error('You can attach up to 6 images.');
+        return prev;
+      }
+      return [...prev, { dataUrl, name }];
+    });
+  };
+
+  const removeImage = (idx: number) =>
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+
+  // Global paste handler for images
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (isAnalyzing) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const url = reader.result as string;
+            addImage(url, file.name || `pasted-${Date.now()}.png`);
+            toast.success('Image pasted!');
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [isAnalyzing]);
 
   const handleFileContent = (content: string) => {
     setDocumentContent(content);
@@ -88,8 +129,8 @@ export default function Analyzer() {
   const handleAnalyze = async () => {
     const content = documentContent || textInput;
     
-    if (!content.trim()) {
-      toast.error('Please upload a file or paste your study material');
+    if (!content.trim() && images.length === 0) {
+      toast.error('Please upload a file, paste text, or add an image');
       return;
     }
 
@@ -101,7 +142,13 @@ export default function Analyzer() {
     setIsAnalyzing(true);
     setDocumentContent(content);
 
-    const response = await analyzeDocument(content, subject, examLevel, examBoard);
+    const response = await analyzeDocument(
+      content,
+      subject,
+      examLevel,
+      examBoard,
+      images.map((i) => i.dataUrl),
+    );
     
     if (response.error) {
       toast.error(response.error);
@@ -145,8 +192,35 @@ export default function Analyzer() {
           <div className="space-y-6">
             <FileUpload 
               onFileContent={handleFileContent}
+              onImageContent={addImage}
+              acceptImages
               isLoading={isAnalyzing}
             />
+
+            {images.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <ImageIcon className="w-3.5 h-3.5" />
+                  Attached images ({images.length}/6)
+                </p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative group rounded-lg overflow-hidden border border-border bg-muted aspect-square">
+                      <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        disabled={isAnalyzing}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-background/80 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                        aria-label="Remove image"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -158,7 +232,7 @@ export default function Analyzer() {
             </div>
 
             <Textarea
-              placeholder="Paste your study material here..."
+              placeholder="Paste your study material here... (you can also paste images with ⌘/Ctrl+V)"
               value={textInput}
               onChange={(e) => handleTextPaste(e.target.value)}
               className="min-h-[150px] resize-none"
@@ -205,7 +279,7 @@ export default function Analyzer() {
 
             <Button
               onClick={handleAnalyze}
-              disabled={isAnalyzing || (!documentContent && !textInput) || !subject}
+              disabled={isAnalyzing || (!documentContent && !textInput && images.length === 0) || !subject}
               className="w-full gap-2"
               variant="hero"
               size="lg"
