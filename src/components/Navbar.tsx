@@ -8,7 +8,7 @@ import {
   ClipboardCheck,
   Layers,
   ScrollText,
-  Network,
+  
   Menu,
   X,
   Sparkles
@@ -22,7 +22,7 @@ const navItems = [
   { path: '/questions', label: 'Practice', icon: BookOpen },
   { path: '/flashcards', label: 'Flashcards', icon: Layers },
   { path: '/summary', label: 'Summary', icon: ScrollText },
-  { path: '/concept-map', label: 'Concepts', icon: Network },
+  
   { path: '/study-plan', label: 'Study Plan', icon: Calendar },
   { path: '/chat', label: 'AI Tutor', icon: MessageCircle },
   { path: '/diagnostic', label: 'Diagnostic', icon: ClipboardCheck },

@@ -14,8 +14,8 @@ import {
   Brain,
   Clock,
   Layers,
-  ScrollText,
-  Network
+  ScrollText
+
 } from 'lucide-react';
 import heroBg from '@/assets/hero-bg.jpg';
 
@@ -49,11 +49,6 @@ const features = [
     icon: ScrollText,
     title: 'Summary & Cheat Sheet',
     description: 'One-click TL;DR, bullet summary, and exam-ready cheat sheet from your notes.',
-  },
-  {
-    icon: Network,
-    title: 'Concept Map',
-    description: 'Visualize how ideas connect and click any node for an instant explanation.',
   },
 ];
 
