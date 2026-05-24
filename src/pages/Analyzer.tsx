@@ -29,6 +29,33 @@ const subjects = [
   'Psychology', 'Economics', 'Computer Science', 'Literature', 'Other'
 ];
 
+const examLevels = [
+  'GCSE',
+  'IGCSE',
+  'A-Level',
+  'AS-Level',
+  'IB (International Baccalaureate)',
+  'BTEC',
+  'SAT',
+  'AP (Advanced Placement)',
+  'University',
+  'Other',
+];
+
+// Common exam boards / syllabi grouped by region
+const examBoards = [
+  'AQA',
+  'OCR',
+  'Edexcel (Pearson)',
+  'WJEC / Eduqas',
+  'CCEA',
+  'Cambridge (CIE)',
+  'Oxford AQA International',
+  'IB',
+  'College Board (SAT/AP)',
+  'Other',
+];
+
 export default function Analyzer() {
   const navigate = useNavigate();
   const { 
@@ -36,6 +63,10 @@ export default function Analyzer() {
     setDocumentContent, 
     subject, 
     setSubject,
+    examLevel,
+    setExamLevel,
+    examBoard,
+    setExamBoard,
     setAnalysisResult,
     analysisResult
   } = useStudyStore();
@@ -70,7 +101,7 @@ export default function Analyzer() {
     setIsAnalyzing(true);
     setDocumentContent(content);
 
-    const response = await analyzeDocument(content, subject);
+    const response = await analyzeDocument(content, subject, examLevel, examBoard);
     
     if (response.error) {
       toast.error(response.error);
@@ -134,35 +165,60 @@ export default function Analyzer() {
               disabled={isAnalyzing}
             />
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Select value={subject} onValueChange={setSubject} disabled={isAnalyzing}>
-                <SelectTrigger className="sm:w-[200px]">
-                  <SelectValue placeholder="Select subject" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Subject</label>
+                <Select value={subject} onValueChange={setSubject} disabled={isAnalyzing}>
+                  <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
+                  <SelectContent>
+                    {subjects.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Button 
-                onClick={handleAnalyze} 
-                disabled={isAnalyzing || (!documentContent && !textInput) || !subject}
-                className="flex-1 sm:flex-none gap-2"
-                variant="hero"
-                size="lg"
-              >
-                {isAnalyzing ? (
-                  <>Analyzing...</>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Analyze Material
-                  </>
-                )}
-              </Button>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Exam level</label>
+                <Select value={examLevel} onValueChange={setExamLevel} disabled={isAnalyzing}>
+                  <SelectTrigger><SelectValue placeholder="e.g. GCSE, A-Level" /></SelectTrigger>
+                  <SelectContent>
+                    {examLevels.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Exam board / syllabus</label>
+                <Select value={examBoard} onValueChange={setExamBoard} disabled={isAnalyzing}>
+                  <SelectTrigger><SelectValue placeholder="e.g. AQA, OCR, Edexcel" /></SelectTrigger>
+                  <SelectContent>
+                    {examBoards.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            <Button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing || (!documentContent && !textInput) || !subject}
+              className="w-full gap-2"
+              variant="hero"
+              size="lg"
+            >
+              {isAnalyzing ? (
+                <>Analyzing...</>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Analyze Material
+                </>
+              )}
+            </Button>
           </div>
         </div>
 

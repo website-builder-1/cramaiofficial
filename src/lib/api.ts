@@ -101,9 +101,11 @@ export interface ChatResponse {
 // API Functions
 export async function analyzeDocument(
   content: string,
-  subject: string
+  subject: string,
+  examLevel?: string,
+  examBoard?: string,
 ): Promise<ApiResponse<AnalysisResult>> {
-  return apiRequest<AnalysisResult>('/api/analyze', { content, subject });
+  return apiRequest<AnalysisResult>('/api/analyze', { content, subject, examLevel, examBoard });
 }
 
 export async function generateQuestions(params: {

@@ -10,6 +10,12 @@ interface StudyState {
   // Subject
   subject: string;
   setSubject: (subject: string) => void;
+
+  examLevel: string;
+  setExamLevel: (level: string) => void;
+
+  examBoard: string;
+  setExamBoard: (board: string) => void;
   
   // Analysis results
   analysisResult: AnalysisResult | null;
@@ -45,6 +51,12 @@ export const useStudyStore = create<StudyState>()(
       
       subject: '',
       setSubject: (subject) => set({ subject }),
+
+      examLevel: '',
+      setExamLevel: (examLevel) => set({ examLevel }),
+
+      examBoard: '',
+      setExamBoard: (examBoard) => set({ examBoard }),
       
       analysisResult: null,
       setAnalysisResult: (result) => set({ analysisResult: result }),
@@ -79,6 +91,8 @@ export const useStudyStore = create<StudyState>()(
         set({
           documentContent: '',
           subject: '',
+          examLevel: '',
+          examBoard: '',
           analysisResult: null,
           questions: [],
           studyPlan: null,

@@ -41,11 +41,15 @@ export default function ConceptMap() {
     setExplanation({ concept: label, text: res.data.message });
   };
 
-  // Simple circular layout
+  // Circular layout sized to node count
+  const VB_W = 1000;
+  const VB_H = 700;
   const positions = useMemo(() => {
     if (!data) return {} as Record<string, { x: number; y: number }>;
-    const n = data.nodes.length;
-    const cx = 300, cy = 250, r = 200;
+    const n = Math.max(data.nodes.length, 1);
+    const cx = VB_W / 2, cy = VB_H / 2;
+    // Scale radius with node count so they don't overlap
+    const r = Math.min(VB_W, VB_H) / 2 - 110;
     const map: Record<string, { x: number; y: number }> = {};
     data.nodes.forEach((node, i) => {
       const a = (i / n) * Math.PI * 2 - Math.PI / 2;
@@ -53,6 +57,23 @@ export default function ConceptMap() {
     });
     return map;
   }, [data]);
+
+  // Wrap label into up to 2 lines of ~14 chars
+  const wrap = (label: string): string[] => {
+    const words = label.split(/\s+/);
+    const lines: string[] = [''];
+    for (const w of words) {
+      const last = lines[lines.length - 1];
+      if ((last + ' ' + w).trim().length <= 14) {
+        lines[lines.length - 1] = (last + ' ' + w).trim();
+      } else if (lines.length < 2) {
+        lines.push(w);
+      } else {
+        lines[1] = lines[1].length > 11 ? lines[1].slice(0, 11) + '…' : lines[1] + ' ' + w;
+      }
+    }
+    return lines;
+  };
 
   return (
     <div className="min-h-screen py-8">
@@ -81,18 +102,45 @@ export default function ConceptMap() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="glass-card rounded-xl p-4 overflow-auto">
-              <svg viewBox="0 0 600 500" className="w-full h-[500px]">
+            <div className="glass-card rounded-xl p-4">
+              <svg
+                viewBox={`0 0 ${VB_W} ${VB_H}`}
+                preserveAspectRatio="xMidYMid meet"
+                className="w-full h-auto max-h-[70vh]"
+              >
+                {/* Edges first so nodes sit on top */}
                 {data.edges?.map((e, i) => {
                   const a = positions[e.from], b = positions[e.to];
                   if (!a || !b) return null;
+                  const mx = (a.x + b.x) / 2;
+                  const my = (a.y + b.y) / 2;
                   return (
                     <g key={i}>
-                      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="hsl(var(--primary) / 0.4)" strokeWidth={1.5} />
+                      <line
+                        x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                        stroke="hsl(var(--primary) / 0.35)"
+                        strokeWidth={2}
+                      />
                       {e.label && (
-                        <text x={(a.x + b.x) / 2} y={(a.y + b.y) / 2} fontSize={9} fill="hsl(var(--muted-foreground))" textAnchor="middle">
-                          {e.label}
-                        </text>
+                        <g>
+                          <rect
+                            x={mx - Math.min(e.label.length, 22) * 3.4}
+                            y={my - 9}
+                            width={Math.min(e.label.length, 22) * 6.8}
+                            height={18}
+                            rx={4}
+                            fill="hsl(var(--background))"
+                            opacity={0.85}
+                          />
+                          <text
+                            x={mx} y={my + 4}
+                            fontSize={11}
+                            fill="hsl(var(--muted-foreground))"
+                            textAnchor="middle"
+                          >
+                            {e.label.length > 22 ? e.label.slice(0, 21) + '…' : e.label}
+                          </text>
+                        </g>
                       )}
                     </g>
                   );
@@ -100,11 +148,39 @@ export default function ConceptMap() {
                 {data.nodes.map((n) => {
                   const p = positions[n.id];
                   if (!p) return null;
+                  const lines = wrap(n.label);
                   return (
-                    <g key={n.id} className="cursor-pointer" onClick={() => explain(n.label)}>
-                      <circle cx={p.x} cy={p.y} r={34} fill="hsl(var(--primary) / 0.15)" stroke="hsl(var(--primary))" strokeWidth={2} />
-                      <text x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={11} fill="hsl(var(--foreground))" className="pointer-events-none">
-                        {n.label.length > 14 ? n.label.slice(0, 13) + '…' : n.label}
+                    <g
+                      key={n.id}
+                      className="cursor-pointer"
+                      onClick={() => explain(n.label)}
+                    >
+                      <ellipse
+                        cx={p.x} cy={p.y}
+                        rx={72} ry={42}
+                        fill="hsl(var(--primary) / 0.15)"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                      />
+                      <text
+                        x={p.x}
+                        y={p.y}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={13}
+                        fontWeight={600}
+                        fill="hsl(var(--foreground))"
+                        className="pointer-events-none"
+                      >
+                        {lines.map((ln, idx) => (
+                          <tspan
+                            key={idx}
+                            x={p.x}
+                            dy={idx === 0 ? (lines.length === 1 ? 0 : -7) : 16}
+                          >
+                            {ln}
+                          </tspan>
+                        ))}
                       </text>
                     </g>
                   );
