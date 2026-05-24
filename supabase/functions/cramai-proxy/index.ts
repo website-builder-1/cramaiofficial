@@ -5,10 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const HF_URL = 'https://router.huggingface.co/v1/chat/completions';
-// Best free models on HF Inference Providers
-const MODEL_CHAT = 'meta-llama/Llama-3.3-70B-Instruct';
-const MODEL_STRUCTURED = 'Qwen/Qwen2.5-72B-Instruct';
+const AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const MODEL_CHAT = 'google/gemini-2.5-flash';
+const MODEL_STRUCTURED = 'google/gemini-2.5-flash';
 
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
@@ -21,7 +20,7 @@ function asNonEmptyString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
-async function callHF(opts: {
+async function callAI(opts: {
   apiKey: string;
   model: string;
   system: string;
@@ -42,7 +41,7 @@ async function callHF(opts: {
     body.response_format = { type: 'json_object' };
   }
 
-  const res = await fetch(HF_URL, {
+  const res = await fetch(AI_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${opts.apiKey}`,
@@ -53,13 +52,32 @@ async function callHF(opts: {
 
   if (!res.ok) {
     const errText = await res.text();
-    console.error(`HF error ${res.status}: ${errText}`);
-    throw new Error(`Hugging Face API error (${res.status}): ${errText.slice(0, 300)}`);
+    console.error(`AI error ${res.status}: ${errText}`);
+    if (res.status === 429) {
+      throw new Error('AI is rate limited right now. Please wait a moment and try again.');
+    }
+    if (res.status === 402) {
+      throw new Error('AI credits exhausted. Please add credits in Workspace > Usage.');
+    }
+    throw new Error(`AI gateway error (${res.status})`);
   }
 
   const data = await res.json();
   const content: string = data?.choices?.[0]?.message?.content ?? '';
   return content;
+}
+
+async function callAIJSON(opts: Parameters<typeof callAI>[0]) {
+  // First attempt
+  let out = await callAI({ ...opts, json: true });
+  try { return extractJSON(out); } catch (_) {}
+  // Retry once with stricter instruction
+  out = await callAI({
+    ...opts,
+    json: true,
+    system: opts.system + '\n\nCRITICAL: Output ONLY a single valid JSON object. No prose, no markdown, no code fences.',
+  });
+  return extractJSON(out);
 }
 
 function extractJSON(text: string): any {
@@ -92,15 +110,13 @@ async function handleEndpoint(
     case '/api/analyze': {
       const content = truncate(body.content);
       const subject = asNonEmptyString(body.subject) || 'General';
-      const out = await callHF({
+      return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
           'You are an expert study assistant. Analyze the provided study material and return ONLY valid JSON matching the requested schema. No prose, no markdown.',
         user: `Subject: ${subject}\n\nMaterial:\n${content}\n\nReturn JSON with this exact shape:\n{\n  "keyTopics": string[],\n  "definitions": [{"term": string, "definition": string}],\n  "concepts": string[],\n  "formulas": string[],\n  "estimatedStudyTime": number (minutes),\n  "summary": string\n}`,
-        json: true,
       });
-      return extractJSON(out);
     }
 
     case '/api/questions/generate':
@@ -111,59 +127,86 @@ async function handleEndpoint(
       const types = Array.isArray(body.types) && body.types.length
         ? body.types
         : ['multiple-choice', 'short-answer', 'true-false'];
-      const out = await callHF({
+      const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
           'You generate exam questions. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.',
         user: `Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (only for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
-        json: true,
         maxTokens: 3500,
       });
-      const parsed = extractJSON(out);
       return Array.isArray(parsed) ? parsed : (parsed.questions || []);
     }
 
     case '/api/questions/grade': {
       const questions = body.questions;
       const userAnswers = body.userAnswers;
-      const out = await callHF({
+      return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
           'You are a strict but fair grader. Return ONLY valid JSON matching the schema. No prose.',
         user: `Questions:\n${truncate(questions)}\n\nUser answers (keyed by question id):\n${truncate(userAnswers)}\n\nReturn JSON:\n{\n  "score": number,\n  "totalQuestions": number,\n  "percentage": number,\n  "answers": [{"questionId": string, "isCorrect": boolean, "userAnswer": string, "correctAnswer": string, "explanation": string}],\n  "weakTopics": string[],\n  "recommendations": string[]\n}`,
-        json: true,
         maxTokens: 3000,
       });
-      return extractJSON(out);
     }
 
     case '/api/study-plan/create': {
       const content = truncate(body.content);
       const hours = Number(body.hoursUntilExam) || 24;
       const weak = Array.isArray(body.weakTopics) ? body.weakTopics : [];
-      const out = await callHF({
+      return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system: 'You are an expert study planner. Return ONLY valid JSON.',
         user: `Create an hour-by-hour study plan for ${hours} hours until the exam.\nWeak topics: ${weak.join(', ') || 'none specified'}\n\nMaterial:\n${content}\n\nReturn JSON:\n{\n  "id": string,\n  "hoursUntilExam": number,\n  "schedule": [{"hour": number, "topic": string, "activity": string, "isBreak": boolean, "completed": false}],\n  "tips": string[]\n}`,
-        json: true,
         maxTokens: 3000,
       });
-      return extractJSON(out);
     }
 
     case '/api/study-plan/last-minute-review': {
       const content = truncate(body.content);
-      const out = await callHF({
+      return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system: 'You create concise last-minute exam review sheets. Return ONLY valid JSON.',
         user: `Material:\n${content}\n\nReturn JSON:\n{\n  "keyPoints": string[],\n  "mustKnow": string[],\n  "quickFormulas": string[],\n  "commonMistakes": string[],\n  "confidenceBooster": string\n}`,
-        json: true,
       });
-      return extractJSON(out);
+    }
+
+    case '/api/flashcards/generate': {
+      const content = truncate(body.content);
+      const count = Number(body.count) || 15;
+      const parsed = await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system: 'You create high-quality study flashcards. Return ONLY valid JSON.',
+        user: `Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
+        maxTokens: 3000,
+      });
+      return Array.isArray(parsed) ? { cards: parsed } : parsed;
+    }
+
+    case '/api/summary/generate': {
+      const content = truncate(body.content);
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system: 'You create concise, exam-ready summaries. Return ONLY valid JSON.',
+        user: `Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
+        maxTokens: 2500,
+      });
+    }
+
+    case '/api/concept-map/generate': {
+      const content = truncate(body.content);
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system: 'You build concept maps showing how ideas connect. Return ONLY valid JSON.',
+        user: `Material:\n${content}\n\nIdentify 6-12 key concepts and the relationships between them.\n\nReturn JSON:\n{\n  "nodes": [{"id": string, "label": string, "group": string}],\n  "edges": [{"from": string, "to": string, "label": string}]\n}`,
+        maxTokens: 2000,
+      });
     }
 
     case '/api/chat':
@@ -204,7 +247,7 @@ async function handleEndpoint(
         (historyStr ? `Recent conversation:\n${historyStr}\n\n` : '') +
         userMsg;
 
-      const out = await callHF({
+      const out = await callAI({
         apiKey,
         model: MODEL_CHAT,
         system,
@@ -225,9 +268,9 @@ serve(async (req) => {
   }
 
   try {
-    const HF_API_KEY = Deno.env.get('HUGGINGFACE_API_KEY');
-    if (!HF_API_KEY) {
-      return jsonResponse({ error: 'Hugging Face API key not configured' });
+    const AI_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!AI_API_KEY) {
+      return jsonResponse({ error: 'AI is not configured (missing LOVABLE_API_KEY).' });
     }
 
     const parsedBody = await req.json().catch(() => null);
@@ -241,8 +284,8 @@ serve(async (req) => {
       return jsonResponse({ error: 'Missing endpoint parameter' });
     }
 
-    console.log(`HF proxy handling: ${endpointStr}`);
-    const data = await handleEndpoint(endpointStr, body as Record<string, unknown>, HF_API_KEY);
+    console.log(`AI proxy handling: ${endpointStr}`);
+    const data = await handleEndpoint(endpointStr, body as Record<string, unknown>, AI_API_KEY);
     return jsonResponse(data);
   } catch (error) {
     console.error('Proxy error:', error);
