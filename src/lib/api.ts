@@ -104,8 +104,9 @@ export async function analyzeDocument(
   subject: string,
   examLevel?: string,
   examBoard?: string,
+  images?: string[],
 ): Promise<ApiResponse<AnalysisResult>> {
-  return apiRequest<AnalysisResult>('/api/analyze', { content, subject, examLevel, examBoard });
+  return apiRequest<AnalysisResult>('/api/analyze', { content, subject, examLevel, examBoard, images });
 }
 
 export async function generateQuestions(params: {
