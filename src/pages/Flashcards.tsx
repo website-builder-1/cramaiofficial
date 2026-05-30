@@ -8,7 +8,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 export default function Flashcards() {
-  const { documentContent } = useStudyStore();
+  const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const material = getStudyMaterial();
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [loading, setLoading] = useState(false);
   const [index, setIndex] = useState(0);
@@ -16,12 +17,12 @@ export default function Flashcards() {
   const [reviewIds, setReviewIds] = useState<Set<string>>(new Set());
 
   const handleGenerate = async () => {
-    if (!documentContent || documentContent.length < 10) {
+    if (!material || material.length < 10) {
       toast.error('Add study material in the Analyzer first.');
       return;
     }
     setLoading(true);
-    const res = await generateFlashcards(documentContent, 15);
+    const res = await generateFlashcards(material, 15, { subject, examLevel, examBoard });
     setLoading(false);
     if (res.error || !res.data) {
       toast.error(res.error || 'Failed to generate flashcards');
@@ -78,9 +79,9 @@ export default function Flashcards() {
         ) : cards.length === 0 ? (
           <div className="glass-card rounded-xl p-8 text-center space-y-4">
             <p className="text-muted-foreground">
-              {documentContent ? 'Ready to generate flashcards from your material.' : 'Add study material in the Analyzer first.'}
+              {material ? 'Ready to generate flashcards from your material.' : 'Add study material in the Analyzer first.'}
             </p>
-            <Button onClick={handleGenerate} variant="hero" size="lg" className="gap-2" disabled={!documentContent}>
+            <Button onClick={handleGenerate} variant="hero" size="lg" className="gap-2" disabled={!material}>
               <Sparkles className="w-5 h-5" /> Generate Flashcards
             </Button>
           </div>

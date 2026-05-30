@@ -6,6 +6,9 @@ interface StudyState {
   // Document content
   documentContent: string;
   setDocumentContent: (content: string) => void;
+
+  // Combined study material (text + serialized analysis for image-only flows)
+  getStudyMaterial: () => string;
   
   // Subject
   subject: string;
@@ -45,9 +48,31 @@ interface StudyState {
 
 export const useStudyStore = create<StudyState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       documentContent: '',
       setDocumentContent: (content) => set({ documentContent: content }),
+
+      getStudyMaterial: () => {
+        const s = get();
+        const parts: string[] = [];
+        if (s.documentContent && s.documentContent.trim()) {
+          parts.push(s.documentContent.trim());
+        }
+        if (s.analysisResult) {
+          const a = s.analysisResult;
+          const block = [
+            a.summary ? `Summary: ${a.summary}` : '',
+            a.keyTopics?.length ? `Key topics: ${a.keyTopics.join(', ')}` : '',
+            a.concepts?.length ? `Concepts:\n- ${a.concepts.join('\n- ')}` : '',
+            a.definitions?.length
+              ? `Definitions:\n${a.definitions.map((d) => `- ${d.term}: ${d.definition}`).join('\n')}`
+              : '',
+            a.formulas?.length ? `Formulas:\n- ${a.formulas.join('\n- ')}` : '',
+          ].filter(Boolean).join('\n\n');
+          if (block) parts.push(block);
+        }
+        return parts.join('\n\n');
+      },
       
       subject: '',
       setSubject: (subject) => set({ subject }),

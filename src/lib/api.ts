@@ -114,6 +114,9 @@ export async function generateQuestions(params: {
   count: number;
   difficulty: 'easy' | 'medium' | 'hard' | 'mixed';
   types: string[];
+  subject?: string;
+  examLevel?: string;
+  examBoard?: string;
 }): Promise<ApiResponse<Question[]>> {
   return apiRequest<Question[]>('/api/questions/generate', params);
 }
@@ -194,12 +197,14 @@ export interface SummaryResult {
 export async function generateFlashcards(
   content: string,
   count = 15,
+  context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<{ cards: Flashcard[] }>> {
-  return apiRequest<{ cards: Flashcard[] }>('/api/flashcards/generate', { content, count });
+  return apiRequest<{ cards: Flashcard[] }>('/api/flashcards/generate', { content, count, ...(context || {}) });
 }
 
 export async function generateSummary(
   content: string,
+  context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<SummaryResult>> {
-  return apiRequest<SummaryResult>('/api/summary/generate', { content });
+  return apiRequest<SummaryResult>('/api/summary/generate', { content, ...(context || {}) });
 }
