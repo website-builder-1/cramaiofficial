@@ -8,6 +8,7 @@ import {
   ClipboardCheck,
   Layers,
   ScrollText,
+  NotebookPen,
   
   Menu,
   X,
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Sparkles },
+  { path: '/notes', label: 'Notes', icon: NotebookPen },
   { path: '/analyzer', label: 'Analyzer', icon: FileText },
   { path: '/questions', label: 'Practice', icon: BookOpen },
   { path: '/flashcards', label: 'Flashcards', icon: Layers },

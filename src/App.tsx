@@ -12,6 +12,7 @@ import Chat from "./pages/Chat";
 import Diagnostic from "./pages/Diagnostic";
 import Flashcards from "./pages/Flashcards";
 import Summary from "./pages/Summary";
+import Notes from "./pages/Notes";
 
 import NotFound from "./pages/NotFound";
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/diagnostic" element={<Diagnostic />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/summary" element={<Summary />} />
+              <Route path="/notes" element={<Notes />} />
               
               <Route path="*" element={<NotFound />} />
             </Routes>

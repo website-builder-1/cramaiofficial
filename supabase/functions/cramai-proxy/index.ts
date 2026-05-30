@@ -230,6 +230,19 @@ async function handleEndpoint(
       });
     }
 
+    case '/api/notes/generate': {
+      const content = truncate(body.content, 12000);
+      const ctx = contextBlock(body);
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.',
+        user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "title": string,\n  "overview": string,\n  "sections": [{"heading": string, "body": string, "bullets": string[], "examples": string[]}],\n  "keyTakeaways": string[]\n}\n\nProduce 4-8 sections. Each section should have a body paragraph PLUS bullets. Include examples where helpful. Empty arrays are allowed but prefer rich content.`,
+        maxTokens: 4000,
+      });
+    }
+
     case '/api/chat':
     case '/api/chat/explain':
     case '/api/chat/hint':
@@ -240,7 +253,10 @@ async function handleEndpoint(
         asNonEmptyString(body.concept) ||
         asNonEmptyString(body.problem) ||
         '';
-      if (!message) throw new Error('Missing message/question');
+      const images = Array.isArray(body.images)
+        ? (body.images as unknown[]).filter((x): x is string => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6)
+        : [];
+      if (!message && images.length === 0) throw new Error('Missing message/question');
 
       const context = truncate(body.context, 4000);
       const history = Array.isArray(body.history) ? body.history : [];
@@ -249,24 +265,32 @@ async function handleEndpoint(
         .map((m: any) => `${m.role}: ${m.content}`)
         .join('\n');
 
-      let system = 'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise.';
-      let userMsg = message;
+      let system =
+        'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
+      let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {
         system += ' The user wants a clear, beginner-friendly explanation of a concept.';
-        userMsg = `Explain this concept clearly: ${message}`;
+        userMsg = `Explain this concept clearly: ${userMsg}`;
       } else if (endpoint === '/api/chat/hint') {
         system += ' Give a helpful hint WITHOUT revealing the full answer.';
-        userMsg = `I am stuck on this problem. Give me a hint:\n${message}`;
+        userMsg = `I am stuck on this problem. Give me a hint:\n${userMsg}`;
       } else if (endpoint === '/api/chat/solve-step') {
         system += ' Solve the problem step-by-step, showing every step clearly.';
-        userMsg = `Solve this step-by-step:\n${message}`;
+        userMsg = `Solve this step-by-step:\n${userMsg}`;
       }
 
-      const userPayload =
+      const userText =
         (context ? `Study material context:\n${context}\n\n` : '') +
         (historyStr ? `Recent conversation:\n${historyStr}\n\n` : '') +
         userMsg;
+
+      const userPayload: string | Array<Record<string, unknown>> = images.length
+        ? [
+            { type: 'text', text: userText },
+            ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+          ]
+        : userText;
 
       const out = await callAI({
         apiKey,
