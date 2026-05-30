@@ -34,7 +34,16 @@ const questionTypes = [
 ];
 
 export default function Questions() {
-  const { documentContent, questions, setQuestions, setWeakTopics } = useStudyStore();
+  const {
+    getStudyMaterial,
+    subject,
+    examLevel,
+    examBoard,
+    questions,
+    setQuestions,
+    setWeakTopics,
+  } = useStudyStore();
+  const material = getStudyMaterial();
   
   const [questionCount, setQuestionCount] = useState(10);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed');
@@ -58,6 +67,10 @@ export default function Questions() {
       toast.error('Please select at least one question type');
       return;
     }
+    if (!material || material.length < 10) {
+      toast.error('Add study material in the Analyzer first so questions stay on topic.');
+      return;
+    }
 
     setIsGenerating(true);
     setShowResults(false);
@@ -66,10 +79,13 @@ export default function Questions() {
     setCurrentQuestion(0);
 
     const response = await generateQuestions({
-      content: documentContent || '',
+      content: material,
       count: questionCount,
       difficulty,
       types: selectedTypes,
+      subject,
+      examLevel,
+      examBoard,
     });
 
     if (response.error) {

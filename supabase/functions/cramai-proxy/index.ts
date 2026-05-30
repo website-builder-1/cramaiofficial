@@ -101,6 +101,18 @@ function truncate(s: unknown, n = 8000): string {
   return str.length > n ? str.slice(0, n) + '\n...[truncated]' : str;
 }
 
+function contextBlock(body: Record<string, unknown>): string {
+  const subject = asNonEmptyString(body.subject);
+  const examLevel = asNonEmptyString(body.examLevel);
+  const examBoard = asNonEmptyString(body.examBoard);
+  const lines = [
+    subject ? `Subject: ${subject}` : null,
+    examLevel ? `Exam level: ${examLevel}` : null,
+    examBoard ? `Exam board / syllabus: ${examBoard}` : null,
+  ].filter(Boolean);
+  return lines.length ? lines.join('\n') + '\n\n' : '';
+}
+
 async function handleEndpoint(
   endpoint: string,
   body: Record<string, unknown>,
@@ -144,12 +156,13 @@ async function handleEndpoint(
       const types = Array.isArray(body.types) && body.types.length
         ? body.types
         : ['multiple-choice', 'short-answer', 'true-false'];
+      const ctx = contextBlock(body);
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You generate exam questions. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.',
-        user: `Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (only for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
+          'You generate exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.',
+        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (only for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
         maxTokens: 3500,
       });
       return Array.isArray(parsed) ? parsed : (parsed.questions || []);
@@ -194,11 +207,12 @@ async function handleEndpoint(
     case '/api/flashcards/generate': {
       const content = truncate(body.content);
       const count = Number(body.count) || 15;
+      const ctx = contextBlock(body);
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create high-quality study flashcards. Return ONLY valid JSON.',
-        user: `Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
+        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.',
+        user: `${ctx}Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts in the material above. Match the depth to the exam level/board if provided.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
         maxTokens: 3000,
       });
       return Array.isArray(parsed) ? { cards: parsed } : parsed;
@@ -206,11 +220,12 @@ async function handleEndpoint(
 
     case '/api/summary/generate': {
       const content = truncate(body.content);
+      const ctx = contextBlock(body);
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create concise, exam-ready summaries. Return ONLY valid JSON.',
-        user: `Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
+        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.',
+        user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
         maxTokens: 2500,
       });
     }

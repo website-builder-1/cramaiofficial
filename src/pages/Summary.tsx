@@ -7,17 +7,18 @@ import { generateSummary, type SummaryResult } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function Summary() {
-  const { documentContent } = useStudyStore();
+  const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const material = getStudyMaterial();
   const [data, setData] = useState<SummaryResult | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
-    if (!documentContent || documentContent.length < 10) {
+    if (!material || material.length < 10) {
       toast.error('Add study material in the Analyzer first.');
       return;
     }
     setLoading(true);
-    const res = await generateSummary(documentContent);
+    const res = await generateSummary(material, { subject, examLevel, examBoard });
     setLoading(false);
     if (res.error || !res.data) {
       toast.error(res.error || 'Failed to generate summary');
@@ -45,9 +46,9 @@ export default function Summary() {
         ) : !data ? (
           <div className="glass-card rounded-xl p-8 text-center space-y-4">
             <p className="text-muted-foreground">
-              {documentContent ? 'Ready to summarize your loaded material.' : 'Add study material in the Analyzer first.'}
+              {material ? 'Ready to summarize your loaded material.' : 'Add study material in the Analyzer first.'}
             </p>
-            <Button onClick={handleGenerate} variant="hero" size="lg" className="gap-2" disabled={!documentContent}>
+            <Button onClick={handleGenerate} variant="hero" size="lg" className="gap-2" disabled={!material}>
               <Sparkles className="w-5 h-5" /> Generate Summary
             </Button>
           </div>
