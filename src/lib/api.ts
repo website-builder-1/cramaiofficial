@@ -152,30 +152,34 @@ export async function getLastMinuteReview(
 export async function sendChatMessage(
   message: string,
   context: string,
-  history: ChatMessage[]
+  history: ChatMessage[],
+  images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat', { message, context, history });
+  return apiRequest<ChatResponse>('/api/chat', { message, context, history, images });
 }
 
 export async function explainConcept(
   concept: string,
-  context: string
+  context: string,
+  images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/explain', { concept, context });
+  return apiRequest<ChatResponse>('/api/chat/explain', { concept, context, images });
 }
 
 export async function getHint(
   problem: string,
-  context: string
+  context: string,
+  images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/hint', { problem, context });
+  return apiRequest<ChatResponse>('/api/chat/hint', { problem, context, images });
 }
 
 export async function solveStepByStep(
   problem: string,
-  context: string
+  context: string,
+  images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/solve-step', { problem, context });
+  return apiRequest<ChatResponse>('/api/chat/solve-step', { problem, context, images });
 }
 
 // New features
@@ -207,4 +211,25 @@ export async function generateSummary(
   context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<SummaryResult>> {
   return apiRequest<SummaryResult>('/api/summary/generate', { content, ...(context || {}) });
+}
+
+export interface NotesSection {
+  heading: string;
+  body?: string;
+  bullets?: string[];
+  examples?: string[];
+}
+
+export interface NotesResult {
+  title: string;
+  overview?: string;
+  sections: NotesSection[];
+  keyTakeaways?: string[];
+}
+
+export async function generateNotes(
+  content: string,
+  context?: { subject?: string; examLevel?: string; examBoard?: string },
+): Promise<ApiResponse<NotesResult>> {
+  return apiRequest<NotesResult>('/api/notes/generate', { content, ...(context || {}) });
 }
