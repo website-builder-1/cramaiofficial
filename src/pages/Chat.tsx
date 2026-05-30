@@ -11,7 +11,6 @@ import {
   User,
   Bot,
   Loader2,
-  ImageIcon,
   Paperclip,
   X,
 } from 'lucide-react';
