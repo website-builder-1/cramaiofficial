@@ -10,7 +10,10 @@ import {
   HelpCircle,
   User,
   Bot,
-  Loader2
+  Loader2,
+  ImageIcon,
+  Paperclip,
+  X,
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep } from '@/lib/api';
@@ -31,11 +34,13 @@ const suggestedQuestions = [
 ];
 
 export default function Chat() {
-  const { chatHistory, addChatMessage, clearChatHistory, documentContent } = useStudyStore();
+  const { chatHistory, addChatMessage, clearChatHistory, getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,37 +50,103 @@ export default function Chat() {
     scrollToBottom();
   }, [chatHistory]);
 
+  const addImage = (dataUrl: string, name: string) => {
+    setImages((prev) => {
+      if (prev.length >= 4) {
+        toast.error('You can attach up to 4 images per message.');
+        return prev;
+      }
+      return [...prev, { dataUrl, name }];
+    });
+  };
+
+  const removeImage = (idx: number) =>
+    setImages((prev) => prev.filter((_, i) => i !== idx));
+
+  const handleFiles = (files: FileList | File[]) => {
+    Array.from(files).forEach((file) => {
+      if (!file.type.startsWith('image/')) {
+        toast.error('Only image files are supported here.');
+        return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error(`${file.name} is too large (max 10MB).`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => addImage(reader.result as string, file.name);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Global paste handler for images
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      if (isLoading) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (!file) continue;
+          const reader = new FileReader();
+          reader.onload = () => {
+            addImage(reader.result as string, file.name || `pasted-${Date.now()}.png`);
+            toast.success('Image pasted!');
+          };
+          reader.readAsDataURL(file);
+          e.preventDefault();
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [isLoading]);
+
   const handleSend = async (content?: string, actionType?: string) => {
     const messageToSend = content || message.trim();
-    if (!messageToSend) return;
+    if (!messageToSend && images.length === 0) return;
 
-    // Validate minimum message length (CramAI requires at least 10 characters)
-    if (messageToSend.length < 10) {
+    // Require min length only if there's no image attached
+    if (messageToSend.length < 10 && images.length === 0) {
       toast.error('Please enter a longer message (at least 10 characters)');
       return;
     }
 
+    const attachedImages = images.map((i) => i.dataUrl);
+    const displayContent = messageToSend || '[Image attached]';
     const userMessage: ChatMessage = {
       role: 'user',
-      content: messageToSend,
+      content:
+        attachedImages.length > 0
+          ? `${displayContent}\n\n_(${attachedImages.length} image${attachedImages.length > 1 ? 's' : ''} attached)_`
+          : displayContent,
       timestamp: new Date(),
     };
     addChatMessage(userMessage);
     setMessage('');
+    setImages([]);
     setIsLoading(true);
 
     let response;
-    const context = documentContent || '';
+    const material = getStudyMaterial();
+    const ctxHeader = [
+      subject ? `Subject: ${subject}` : '',
+      examLevel ? `Exam level: ${examLevel}` : '',
+      examBoard ? `Exam board: ${examBoard}` : '',
+    ].filter(Boolean).join('\n');
+    const context = [ctxHeader, material].filter(Boolean).join('\n\n');
+    const promptText = messageToSend || 'Please read the attached image(s) and help me understand them in the context of my study material.';
 
     // Use the appropriate API based on action type
     if (actionType === 'explain') {
-      response = await explainConcept(messageToSend, context);
+      response = await explainConcept(promptText, context, attachedImages);
     } else if (actionType === 'hint') {
-      response = await getHint(messageToSend, context);
+      response = await getHint(promptText, context, attachedImages);
     } else if (actionType === 'solve') {
-      response = await solveStepByStep(messageToSend, context);
+      response = await solveStepByStep(promptText, context, attachedImages);
     } else {
-      response = await sendChatMessage(messageToSend, context, chatHistory);
+      response = await sendChatMessage(promptText, context, chatHistory, attachedImages);
     }
 
     if (response.error) {
@@ -151,6 +222,13 @@ export default function Chat() {
 
         {/* Chat Area */}
         <div className="flex-1 glass-card rounded-xl flex flex-col overflow-hidden">
+          {/* Material context indicator */}
+          {getStudyMaterial() && (
+            <div className="px-4 py-2 border-b border-border bg-accent/30 text-xs text-muted-foreground flex items-center gap-2">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              Tutor has access to your Analyzer material{subject ? ` (${subject}${examLevel ? `, ${examLevel}` : ''}${examBoard ? `, ${examBoard}` : ''})` : ''}.
+            </div>
+          )}
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {chatHistory.length === 0 ? (
@@ -224,6 +302,24 @@ export default function Chat() {
 
           {/* Input */}
           <div className="p-4 border-t border-border">
+            {images.length > 0 && (
+              <div className="mb-3 flex flex-wrap gap-2">
+                {images.map((img, i) => (
+                  <div key={i} className="relative group w-16 h-16 rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={img.dataUrl} alt={img.name} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      disabled={isLoading}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-background/80 backdrop-blur flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive hover:text-destructive-foreground"
+                      aria-label="Remove image"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -231,11 +327,32 @@ export default function Chat() {
               }}
               className="flex gap-2"
             >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) handleFiles(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={isLoading}
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach image (or paste with ⌘/Ctrl+V)"
+              >
+                <Paperclip className="w-4 h-4" />
+              </Button>
               <Input
                 ref={inputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask your AI tutor anything..."
+                placeholder="Ask your AI tutor anything... (paste images with ⌘/Ctrl+V)"
                 disabled={isLoading}
                 className="flex-1"
               />
@@ -243,7 +360,7 @@ export default function Chat() {
                 type="submit"
                 variant="hero"
                 size="icon"
-                disabled={!message.trim() || isLoading}
+                disabled={(!message.trim() && images.length === 0) || isLoading}
               >
                 <Send className="w-4 h-4" />
               </Button>
