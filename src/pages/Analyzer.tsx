@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/FileUpload';
 import { LoadingCard } from '@/components/LoadingSpinner';
 import { 
@@ -27,8 +28,29 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 
 const subjects = [
-  'Biology', 'Chemistry', 'Physics', 'Math', 'History', 
-  'Psychology', 'Economics', 'Computer Science', 'Literature', 'Other'
+  // Sciences
+  'Biology', 'Chemistry', 'Physics', 'Combined Science', 'Environmental Science', 'Astronomy', 'Geology',
+  // Maths
+  'Mathematics', 'Further Mathematics', 'Statistics', 'Core Maths', 'Mechanics',
+  // Computing & Tech
+  'Computer Science', 'ICT', 'Design & Technology', 'Engineering', 'Electronics',
+  // Humanities & Social Sciences
+  'History', 'Geography', 'Religious Studies', 'Philosophy', 'Politics', 'Government & Politics',
+  'Sociology', 'Psychology', 'Economics', 'Business Studies', 'Accounting', 'Law', 'Criminology',
+  'Citizenship Studies', 'Classical Civilisation', 'Ancient History', 'Archaeology',
+  // English & Literature
+  'English Language', 'English Literature', 'English Language & Literature', 'Media Studies',
+  'Film Studies', 'Drama & Theatre', 'Performing Arts',
+  // Modern & Classical Languages
+  'French', 'Spanish', 'German', 'Italian', 'Mandarin Chinese', 'Japanese', 'Russian', 'Arabic',
+  'Polish', 'Portuguese', 'Urdu', 'Latin', 'Ancient Greek', 'Biblical Hebrew',
+  // Arts & Creative
+  'Art & Design', 'Fine Art', 'Photography', 'Graphic Design', 'Textiles', 'Music', 'Music Technology', 'Dance',
+  // PE / Health / Food
+  'Physical Education', 'Sport Science', 'Health & Social Care', 'Food Preparation & Nutrition', 'Hospitality',
+  // BTEC / Vocational common
+  'Travel & Tourism', 'Applied Science', 'Construction', 'Childcare',
+  'Other',
 ];
 
 const examLevels = [
@@ -77,6 +99,29 @@ export default function Analyzer() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [localResult, setLocalResult] = useState<AnalysisResult | null>(analysisResult);
   const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
+  const [customSubject, setCustomSubject] = useState('');
+  const isOtherSubject = subjects.includes(subject) ? subject === 'Other' : !!subject;
+
+  // If a persisted custom subject is loaded, surface it in the input.
+  useEffect(() => {
+    if (subject && !subjects.includes(subject)) {
+      setCustomSubject(subject);
+    }
+  }, []);
+
+  const handleSubjectChange = (value: string) => {
+    if (value === 'Other') {
+      setSubject(customSubject.trim() ? customSubject.trim() : 'Other');
+    } else {
+      setSubject(value);
+      setCustomSubject('');
+    }
+  };
+
+  const handleCustomSubjectChange = (value: string) => {
+    setCustomSubject(value);
+    setSubject(value.trim() || 'Other');
+  };
 
   const addImage = (dataUrl: string, name: string) => {
     setImages((prev) => {
@@ -242,7 +287,11 @@ export default function Analyzer() {
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Subject</label>
-                <Select value={subject} onValueChange={setSubject} disabled={isAnalyzing}>
+                <Select
+                  value={subjects.includes(subject) ? subject : (subject ? 'Other' : '')}
+                  onValueChange={handleSubjectChange}
+                  disabled={isAnalyzing}
+                >
                   <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
                   <SelectContent>
                     {subjects.map((s) => (
@@ -250,6 +299,15 @@ export default function Analyzer() {
                     ))}
                   </SelectContent>
                 </Select>
+                {isOtherSubject && (
+                  <Input
+                    placeholder="Type your subject (e.g. Marine Biology)"
+                    value={customSubject}
+                    onChange={(e) => handleCustomSubjectChange(e.target.value)}
+                    disabled={isAnalyzing}
+                    className="mt-2"
+                  />
+                )}
               </div>
 
               <div className="space-y-1.5">
