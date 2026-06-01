@@ -5,6 +5,7 @@ import { ScrollText, Sparkles } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { generateSummary, type SummaryResult } from '@/lib/api';
 import { toast } from 'sonner';
+import { RichText } from '@/components/RichText';
 
 export default function Summary() {
   const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
@@ -56,20 +57,20 @@ export default function Summary() {
           <div className="space-y-6">
             <div className="glass-card rounded-xl p-6">
               <h2 className="text-lg font-semibold mb-2 gradient-text">TL;DR</h2>
-              <p className="text-foreground">{data.tldr}</p>
+              <RichText html={data.tldr} className="text-foreground" />
             </div>
 
             <div className="glass-card rounded-xl p-6">
               <h2 className="text-lg font-semibold mb-3">Bullet Summary</h2>
               <ul className="space-y-2 list-disc pl-5 text-foreground">
-                {data.bulletSummary?.map((b, i) => <li key={i}>{b}</li>)}
+                {data.bulletSummary?.map((b, i) => <li key={i}><RichText html={b} as="span" /></li>)}
               </ul>
             </div>
 
             <div className="glass-card rounded-xl p-6">
               <h2 className="text-lg font-semibold mb-3">Cheat Sheet</h2>
               <ul className="space-y-2 list-disc pl-5 text-foreground">
-                {data.cheatSheet?.map((b, i) => <li key={i}>{b}</li>)}
+                {data.cheatSheet?.map((b, i) => <li key={i}><RichText html={b} as="span" /></li>)}
               </ul>
             </div>
 
@@ -80,7 +81,7 @@ export default function Summary() {
                   {data.keyTerms.map((t, i) => (
                     <div key={i}>
                       <dt className="font-semibold text-foreground">{t.term}</dt>
-                      <dd className="text-muted-foreground text-sm">{t.definition}</dd>
+                      <dd className="text-muted-foreground text-sm"><RichText html={t.definition} as="span" /></dd>
                     </div>
                   ))}
                 </dl>
