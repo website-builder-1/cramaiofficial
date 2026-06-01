@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { Textarea } from '@/components/ui/textarea';
 import { LoadingCard } from '@/components/LoadingSpinner';
 import { 
   Select,
@@ -39,20 +40,31 @@ export default function Questions() {
     subject,
     examLevel,
     examBoard,
-    questions,
-    setQuestions,
     setWeakTopics,
+    questionsState,
+    setQuestionsState,
   } = useStudyStore();
   const material = getStudyMaterial();
-  
+
   const [questionCount, setQuestionCount] = useState(10);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed');
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['multiple-choice', 'true-false']);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [isGraded, setIsGraded] = useState(false);
+  const [isGrading, setIsGrading] = useState(false);
+
+  const questions = questionsState?.questions ?? [];
+  const userAnswers = questionsState?.userAnswers ?? {};
+  const isGraded = questionsState?.isGraded ?? false;
+  const gradeResult = questionsState?.gradeResult ?? null;
+  const showResults = questions.length > 0;
+
+  const gradedById = (() => {
+    const map: Record<string, { isCorrect: boolean; correctAnswer: string; explanation?: string }> = {};
+    gradeResult?.answers?.forEach((a) => {
+      map[a.questionId] = { isCorrect: a.isCorrect, correctAnswer: a.correctAnswer, explanation: a.explanation };
+    });
+    return map;
+  })();
 
   const toggleQuestionType = (type: string) => {
     setSelectedTypes(prev => 
@@ -73,10 +85,7 @@ export default function Questions() {
     }
 
     setIsGenerating(true);
-    setShowResults(false);
-    setUserAnswers({});
-    setIsGraded(false);
-    setCurrentQuestion(0);
+    setQuestionsState(null);
 
     const response = await generateQuestions({
       content: material,
@@ -95,8 +104,12 @@ export default function Questions() {
     }
 
     if (response.data) {
-      setQuestions(response.data);
-      setShowResults(true);
+      setQuestionsState({
+        questions: response.data,
+        userAnswers: {},
+        isGraded: false,
+        gradeResult: null,
+      });
       toast.success(`Generated ${response.data.length} practice questions!`);
     }
     
@@ -104,29 +117,53 @@ export default function Questions() {
   };
 
   const handleAnswer = (questionId: string, answer: string) => {
-    setUserAnswers(prev => ({ ...prev, [questionId]: answer }));
+    if (isGraded) return;
+    setQuestionsState({
+      questions,
+      userAnswers: { ...userAnswers, [questionId]: answer },
+      isGraded: false,
+      gradeResult: null,
+    });
   };
 
   const handleGrade = async () => {
+    setIsGrading(true);
     const response = await gradeAnswers(questions, userAnswers);
+    setIsGrading(false);
 
     if (response.error) {
       // Fallback to local grading if API fails
       let correct = 0;
       const weakTopicsSet = new Set<string>();
-
-      questions.forEach(q => {
-        if (userAnswers[q.id] === q.correctAnswer) {
-          correct++;
-        } else {
-          weakTopicsSet.add(q.topic);
-        }
+      const answers = questions.map((q) => {
+        const ua = userAnswers[q.id] || '';
+        const ok = ua.trim().toLowerCase() === (q.correctAnswer || '').trim().toLowerCase();
+        if (ok) correct++;
+        else weakTopicsSet.add(q.topic);
+        return {
+          questionId: q.id,
+          isCorrect: ok,
+          userAnswer: ua,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+        };
+      });
+      const percentage = Math.round((correct / questions.length) * 100);
+      setWeakTopics(Array.from(weakTopicsSet));
+      setQuestionsState({
+        questions,
+        userAnswers,
+        isGraded: true,
+        gradeResult: {
+          score: correct,
+          totalQuestions: questions.length,
+          percentage,
+          answers,
+          weakTopics: Array.from(weakTopicsSet),
+          recommendations: [],
+        },
       });
 
-      setWeakTopics(Array.from(weakTopicsSet));
-      setIsGraded(true);
-      
-      const percentage = Math.round((correct / questions.length) * 100);
       if (percentage >= 80) {
         toast.success(`Great job! You scored ${percentage}%!`);
       } else if (percentage >= 60) {
@@ -139,7 +176,12 @@ export default function Questions() {
 
     if (response.data) {
       setWeakTopics(response.data.weakTopics);
-      setIsGraded(true);
+      setQuestionsState({
+        questions,
+        userAnswers,
+        isGraded: true,
+        gradeResult: response.data,
+      });
       
       const percentage = response.data.percentage;
       if (percentage >= 80) {
@@ -153,17 +195,11 @@ export default function Questions() {
   };
 
   const handleReset = () => {
-    setShowResults(false);
-    setUserAnswers({});
-    setIsGraded(false);
-    setCurrentQuestion(0);
-    setQuestions([]);
+    setQuestionsState(null);
   };
 
-  const score = isGraded 
-    ? questions.filter(q => userAnswers[q.id] === q.correctAnswer).length 
-    : 0;
-  const percentage = isGraded ? Math.round((score / questions.length) * 100) : 0;
+  const score = gradeResult?.score ?? 0;
+  const percentage = gradeResult?.percentage ?? 0;
 
   return (
     <div className="min-h-screen py-8">
@@ -294,8 +330,8 @@ export default function Questions() {
                     key={question.id} 
                     className={cn(
                       'glass-card rounded-xl p-6 animate-slide-up',
-                      isGraded && userAnswers[question.id] === question.correctAnswer && 'ring-2 ring-success',
-                      isGraded && userAnswers[question.id] !== question.correctAnswer && 'ring-2 ring-destructive'
+                      isGraded && gradedById[question.id]?.isCorrect && 'ring-2 ring-success',
+                      isGraded && gradedById[question.id] && !gradedById[question.id].isCorrect && 'ring-2 ring-destructive'
                     )}
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
@@ -314,51 +350,88 @@ export default function Questions() {
                             {question.difficulty}
                           </span>
                           <span className="text-xs text-muted-foreground">{question.topic}</span>
+                          <span className="text-xs text-muted-foreground capitalize">· {question.type.replace('-', ' ')}</span>
                         </div>
                         <p className="font-medium text-foreground">{question.question}</p>
                       </div>
                     </div>
 
-                    <RadioGroup
-                      value={userAnswers[question.id] || ''}
-                      onValueChange={(value) => handleAnswer(question.id, value)}
-                      className="space-y-2 ml-12"
-                      disabled={isGraded}
-                    >
-                      {question.options?.map((option, i) => (
-                        <div
-                          key={i}
-                          className={cn(
-                            'flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer',
-                            userAnswers[question.id] === option 
-                              ? 'border-primary bg-accent' 
-                              : 'border-border hover:border-primary/50',
-                            isGraded && option === question.correctAnswer && 'border-success bg-success/10',
-                            isGraded && userAnswers[question.id] === option && option !== question.correctAnswer && 'border-destructive bg-destructive/10'
-                          )}
-                          onClick={() => !isGraded && handleAnswer(question.id, option)}
-                        >
-                          <RadioGroupItem value={option} id={`${question.id}-${i}`} />
-                          <Label 
-                            htmlFor={`${question.id}-${i}`} 
-                            className="flex-1 cursor-pointer font-normal"
+                    {question.options && question.options.length > 0 ? (
+                      <RadioGroup
+                        value={userAnswers[question.id] || ''}
+                        onValueChange={(value) => handleAnswer(question.id, value)}
+                        className="space-y-2 ml-12"
+                        disabled={isGraded}
+                      >
+                        {question.options.map((option, i) => (
+                          <div
+                            key={i}
+                            className={cn(
+                              'flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer',
+                              userAnswers[question.id] === option
+                                ? 'border-primary bg-accent'
+                                : 'border-border hover:border-primary/50',
+                              isGraded && option === question.correctAnswer && 'border-success bg-success/10',
+                              isGraded && userAnswers[question.id] === option && option !== question.correctAnswer && 'border-destructive bg-destructive/10'
+                            )}
+                            onClick={() => !isGraded && handleAnswer(question.id, option)}
                           >
-                            {option}
-                          </Label>
-                          {isGraded && option === question.correctAnswer && (
-                            <CheckCircle2 className="w-5 h-5 text-success" />
+                            <RadioGroupItem value={option} id={`${question.id}-${i}`} />
+                            <Label
+                              htmlFor={`${question.id}-${i}`}
+                              className="flex-1 cursor-pointer font-normal"
+                            >
+                              {option}
+                            </Label>
+                            {isGraded && option === question.correctAnswer && (
+                              <CheckCircle2 className="w-5 h-5 text-success" />
+                            )}
+                            {isGraded && userAnswers[question.id] === option && option !== question.correctAnswer && (
+                              <XCircle className="w-5 h-5 text-destructive" />
+                            )}
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    ) : (
+                      <div className="ml-12 space-y-3">
+                        <Textarea
+                          placeholder={question.type === 'essay'
+                            ? 'Write your essay answer here. Aim for structured paragraphs with clear arguments and evidence.'
+                            : 'Write your short answer here (1-3 sentences).'}
+                          value={userAnswers[question.id] || ''}
+                          onChange={(e) => handleAnswer(question.id, e.target.value)}
+                          disabled={isGraded}
+                          className={cn(
+                            'resize-y',
+                            question.type === 'essay' ? 'min-h-[200px]' : 'min-h-[100px]'
                           )}
-                          {isGraded && userAnswers[question.id] === option && option !== question.correctAnswer && (
-                            <XCircle className="w-5 h-5 text-destructive" />
-                          )}
-                        </div>
-                      ))}
-                    </RadioGroup>
+                        />
+                        {isGraded && gradedById[question.id] && (
+                          <div className={cn(
+                            'p-3 rounded-lg border text-sm',
+                            gradedById[question.id].isCorrect
+                              ? 'border-success/40 bg-success/5'
+                              : 'border-destructive/40 bg-destructive/5'
+                          )}>
+                            <div className="flex items-center gap-2 mb-2 font-medium">
+                              {gradedById[question.id].isCorrect ? (
+                                <><CheckCircle2 className="w-4 h-4 text-success" /> <span className="text-success">Correct</span></>
+                              ) : (
+                                <><XCircle className="w-4 h-4 text-destructive" /> <span className="text-destructive">Needs work</span></>
+                              )}
+                            </div>
+                            <p className="text-foreground">
+                              <strong>Reference answer:</strong> {gradedById[question.id].correctAnswer || question.correctAnswer}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                    {isGraded && question.explanation && (
+                    {isGraded && (gradedById[question.id]?.explanation || question.explanation) && (
                       <div className="mt-4 ml-12 p-4 rounded-lg bg-muted/50">
                         <p className="text-sm text-muted-foreground">
-                          <strong className="text-foreground">Explanation:</strong> {question.explanation}
+                          <strong className="text-foreground">Explanation:</strong> {gradedById[question.id]?.explanation || question.explanation}
                         </p>
                       </div>
                     )}
@@ -373,10 +446,13 @@ export default function Questions() {
                       variant="hero"
                       size="lg"
                       className="flex-1 gap-2"
-                      disabled={Object.keys(userAnswers).length !== questions.length}
+                      disabled={
+                        isGrading ||
+                        questions.some((q) => !(userAnswers[q.id] && userAnswers[q.id].trim()))
+                      }
                     >
                       <Target className="w-5 h-5" />
-                      Check Answers
+                      {isGrading ? 'Grading...' : 'Check Answers'}
                     </Button>
                     <Button
                       onClick={handleReset}

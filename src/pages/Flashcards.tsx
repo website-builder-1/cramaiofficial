@@ -8,13 +8,30 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
 export default function Flashcards() {
-  const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const {
+    getStudyMaterial,
+    subject,
+    examLevel,
+    examBoard,
+    flashcardsState,
+    setFlashcardsState,
+  } = useStudyStore();
   const material = getStudyMaterial();
-  const [cards, setCards] = useState<Flashcard[]>([]);
   const [loading, setLoading] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [flipped, setFlipped] = useState(false);
-  const [reviewIds, setReviewIds] = useState<Set<string>>(new Set());
+
+  const cards = flashcardsState?.cards ?? [];
+  const index = flashcardsState?.index ?? 0;
+  const flipped = flashcardsState?.flipped ?? false;
+  const reviewIds = new Set(flashcardsState?.reviewIds ?? []);
+
+  const updateState = (patch: Partial<{ cards: Flashcard[]; index: number; flipped: boolean; reviewIds: string[] }>) => {
+    setFlashcardsState({
+      cards: patch.cards ?? cards,
+      index: patch.index ?? index,
+      flipped: patch.flipped ?? flipped,
+      reviewIds: patch.reviewIds ?? Array.from(reviewIds),
+    });
+  };
 
   const handleGenerate = async () => {
     if (!material || material.length < 10) {
@@ -29,35 +46,30 @@ export default function Flashcards() {
       return;
     }
     const list = (res.data.cards || []).map((c, i) => ({ ...c, id: c.id || `card-${i}` }));
-    setCards(list);
-    setIndex(0);
-    setFlipped(false);
-    setReviewIds(new Set());
+    setFlashcardsState({ cards: list, index: 0, flipped: false, reviewIds: [] });
     toast.success(`Generated ${list.length} flashcards!`);
   };
 
   const current = cards[index];
 
   const next = () => {
-    setFlipped(false);
-    setIndex((i) => (i + 1) % cards.length);
+    if (cards.length === 0) return;
+    updateState({ flipped: false, index: (index + 1) % cards.length });
   };
   const prev = () => {
-    setFlipped(false);
-    setIndex((i) => (i - 1 + cards.length) % cards.length);
+    if (cards.length === 0) return;
+    updateState({ flipped: false, index: (index - 1 + cards.length) % cards.length });
   };
 
   const markGot = () => {
-    const id = current.id;
-    setReviewIds((s) => {
-      const n = new Set(s); n.delete(id); return n;
-    });
-    next();
+    if (!current) return;
+    const n = new Set(reviewIds); n.delete(current.id);
+    updateState({ reviewIds: Array.from(n), flipped: false, index: (index + 1) % cards.length });
   };
   const markReview = () => {
-    const id = current.id;
-    setReviewIds((s) => new Set(s).add(id));
-    next();
+    if (!current) return;
+    const n = new Set(reviewIds); n.add(current.id);
+    updateState({ reviewIds: Array.from(n), flipped: false, index: (index + 1) % cards.length });
   };
 
   return (
@@ -97,7 +109,7 @@ export default function Flashcards() {
                 'glass-card rounded-2xl p-10 min-h-[280px] flex items-center justify-center text-center cursor-pointer transition-transform select-none',
                 flipped && 'ring-2 ring-primary'
               )}
-              onClick={() => setFlipped((f) => !f)}
+              onClick={() => updateState({ flipped: !flipped })}
             >
               <div>
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
@@ -112,7 +124,7 @@ export default function Flashcards() {
 
             <div className="flex flex-wrap gap-3 justify-center">
               <Button variant="outline" onClick={prev} className="gap-2"><ChevronLeft className="w-4 h-4" /> Prev</Button>
-              <Button variant="outline" onClick={() => setFlipped((f) => !f)} className="gap-2"><RotateCcw className="w-4 h-4" /> Flip</Button>
+              <Button variant="outline" onClick={() => updateState({ flipped: !flipped })} className="gap-2"><RotateCcw className="w-4 h-4" /> Flip</Button>
               <Button onClick={markReview} variant="outline" className="gap-2"><RefreshCw className="w-4 h-4" /> Review again</Button>
               <Button onClick={markGot} variant="hero" className="gap-2"><Check className="w-4 h-4" /> Got it</Button>
               <Button variant="outline" onClick={next} className="gap-2">Next <ChevronRight className="w-4 h-4" /></Button>

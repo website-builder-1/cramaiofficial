@@ -162,16 +162,19 @@ async function handleEndpoint(
       const content = truncate(body.content);
       const count = Number(body.count) || 10;
       const difficulty = asNonEmptyString(body.difficulty) || 'mixed';
-      const types = Array.isArray(body.types) && body.types.length
-        ? body.types
-        : ['multiple-choice', 'short-answer', 'true-false'];
+      // Diagnostic UI only supports choice-style answers — force MC/TF there.
+      const types = endpoint === '/api/questions/diagnostic'
+        ? ['multiple-choice', 'true-false']
+        : (Array.isArray(body.types) && body.types.length
+            ? body.types
+            : ['multiple-choice', 'short-answer', 'true-false']);
       const ctx = contextBlock(body);
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You generate exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES,
-        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (only for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
+          'You generate high-quality exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material.\n\nRULES PER TYPE:\n- multiple-choice: provide 4 plausible options in "options"; "correctAnswer" must equal one option verbatim.\n- true-false: "options" = ["True","False"]; "correctAnswer" = "True" or "False".\n- short-answer: NO options. "correctAnswer" is a 1-3 sentence model answer covering the required points.\n- essay: NO options. "question" is a real essay prompt (e.g. "Discuss...", "Evaluate...", "To what extent..."). "correctAnswer" is a detailed mark-scheme / model answer (3-6 sentences) listing the key arguments, evidence, and structure expected. Match the exam-board command words and depth.\n\nReturn ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES,
+        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (ONLY for multiple-choice/true-false — omit for short-answer/essay),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
         maxTokens: 3500,
       });
       return Array.isArray(parsed) ? parsed : (parsed.questions || []);
@@ -184,7 +187,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are a strict but fair grader. Return ONLY valid JSON matching the schema. No prose.' + HTML_FORMAT_RULES,
+          'You are a strict but fair exam grader. Grade each answer against its correctAnswer / mark scheme.\n- For multiple-choice/true-false: isCorrect only if the user answer matches the correct option exactly (case-insensitive).\n- For short-answer: isCorrect if the user covers the key points in the correctAnswer, even if worded differently. Allow synonyms.\n- For essay: isCorrect if the user demonstrates the core argument, structure, and key evidence from the mark scheme. Be reasonable — partial but solid attempts count as correct. Give a brief explanation noting what was strong and what was missing.\nReturn ONLY valid JSON matching the schema. No prose.' + HTML_FORMAT_RULES,
         user: `Questions:\n${truncate(questions)}\n\nUser answers (keyed by question id):\n${truncate(userAnswers)}\n\nReturn JSON:\n{\n  "score": number,\n  "totalQuestions": number,\n  "percentage": number,\n  "answers": [{"questionId": string, "isCorrect": boolean, "userAnswer": string, "correctAnswer": string, "explanation": string}],\n  "weakTopics": string[],\n  "recommendations": string[]\n}`,
         maxTokens: 3000,
       });

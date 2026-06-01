@@ -1,6 +1,44 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { AnalysisResult, StudyPlan, Question, ChatMessage } from './api';
+import type {
+  AnalysisResult,
+  StudyPlan,
+  Question,
+  ChatMessage,
+  Flashcard,
+  SummaryResult,
+  NotesResult,
+  GradeResult,
+} from './api';
+
+export interface FlashcardsState {
+  cards: Flashcard[];
+  index: number;
+  flipped: boolean;
+  reviewIds: string[];
+}
+
+export interface QuestionsState {
+  questions: Question[];
+  userAnswers: Record<string, string>;
+  isGraded: boolean;
+  gradeResult: GradeResult | null;
+}
+
+export interface DiagnosticResults {
+  score: number;
+  percentage: number;
+  weakTopics: string[];
+  recommendations: string[];
+}
+
+export interface DiagnosticState {
+  questions: Question[];
+  currentIndex: number;
+  userAnswers: Record<string, string>;
+  isCompleted: boolean;
+  results: DiagnosticResults | null;
+}
 
 interface StudyState {
   // Document content
@@ -27,6 +65,25 @@ interface StudyState {
   // Generated questions
   questions: Question[];
   setQuestions: (questions: Question[]) => void;
+
+  // Persisted generated content (per-page)
+  notesData: NotesResult | null;
+  setNotesData: (data: NotesResult | null) => void;
+
+  summaryData: SummaryResult | null;
+  setSummaryData: (data: SummaryResult | null) => void;
+
+  flashcardsState: FlashcardsState | null;
+  setFlashcardsState: (state: FlashcardsState | null) => void;
+
+  questionsState: QuestionsState | null;
+  setQuestionsState: (state: QuestionsState | null) => void;
+
+  diagnosticState: DiagnosticState | null;
+  setDiagnosticState: (state: DiagnosticState | null) => void;
+
+  // Reset only the generated content (used when new material is analyzed)
+  resetGeneratedContent: () => void;
   
   // Study plan
   studyPlan: StudyPlan | null;
@@ -88,6 +145,33 @@ export const useStudyStore = create<StudyState>()(
       
       questions: [],
       setQuestions: (questions) => set({ questions }),
+
+      notesData: null,
+      setNotesData: (notesData) => set({ notesData }),
+
+      summaryData: null,
+      setSummaryData: (summaryData) => set({ summaryData }),
+
+      flashcardsState: null,
+      setFlashcardsState: (flashcardsState) => set({ flashcardsState }),
+
+      questionsState: null,
+      setQuestionsState: (questionsState) => set({ questionsState }),
+
+      diagnosticState: null,
+      setDiagnosticState: (diagnosticState) => set({ diagnosticState }),
+
+      resetGeneratedContent: () =>
+        set({
+          notesData: null,
+          summaryData: null,
+          flashcardsState: null,
+          questionsState: null,
+          diagnosticState: null,
+          questions: [],
+          studyPlan: null,
+          weakTopics: [],
+        }),
       
       studyPlan: null,
       setStudyPlan: (plan) => set({ studyPlan: plan }),
@@ -123,6 +207,11 @@ export const useStudyStore = create<StudyState>()(
           studyPlan: null,
           chatHistory: [],
           weakTopics: [],
+          notesData: null,
+          summaryData: null,
+          flashcardsState: null,
+          questionsState: null,
+          diagnosticState: null,
         }),
     }),
     {

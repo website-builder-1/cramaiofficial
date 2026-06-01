@@ -8,9 +8,9 @@ import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
 
 export default function Notes() {
-  const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData } = useStudyStore();
   const material = getStudyMaterial();
-  const [data, setData] = useState<NotesResult | null>(null);
+  const data = notesData;
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
@@ -25,7 +25,7 @@ export default function Notes() {
       toast.error(res.error || 'Failed to generate notes');
       return;
     }
-    setData(res.data);
+    setNotesData(res.data);
     toast.success('Notes ready!');
   };
 

@@ -92,7 +92,8 @@ export default function Analyzer() {
     examBoard,
     setExamBoard,
     setAnalysisResult,
-    analysisResult
+    analysisResult,
+    resetGeneratedContent,
   } = useStudyStore();
   
   const [textInput, setTextInput] = useState('');
@@ -186,6 +187,8 @@ export default function Analyzer() {
 
     setIsAnalyzing(true);
     setDocumentContent(content);
+    // New analysis = wipe everything generated from prior material
+    resetGeneratedContent();
 
     const response = await analyzeDocument(
       content,
