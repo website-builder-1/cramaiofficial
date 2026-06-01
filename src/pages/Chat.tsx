@@ -18,6 +18,7 @@ import { useStudyStore } from '@/lib/store';
 import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichText } from '@/components/RichText';
 
 const quickActions = [
   { icon: Lightbulb, label: 'Explain this concept', action: 'explain' },
@@ -275,7 +276,11 @@ export default function Chat() {
                           : 'bg-muted rounded-bl-md'
                       )}
                     >
-                      <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                      {msg.role === 'assistant' ? (
+                        <RichText html={msg.content} className="text-sm" />
+                      ) : (
+                        <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                      )}
                     </div>
                     {msg.role === 'user' && (
                       <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center shrink-0">
