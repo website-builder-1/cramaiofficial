@@ -8,9 +8,9 @@ import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
 
 export default function Summary() {
-  const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const { getStudyMaterial, subject, examLevel, examBoard, summaryData, setSummaryData } = useStudyStore();
   const material = getStudyMaterial();
-  const [data, setData] = useState<SummaryResult | null>(null);
+  const data = summaryData;
   const [loading, setLoading] = useState(false);
 
   const handleGenerate = async () => {
@@ -25,7 +25,7 @@ export default function Summary() {
       toast.error(res.error || 'Failed to generate summary');
       return;
     }
-    setData(res.data);
+    setSummaryData(res.data);
     toast.success('Summary ready!');
   };
 
