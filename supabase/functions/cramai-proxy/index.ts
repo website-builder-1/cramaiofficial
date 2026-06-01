@@ -9,6 +9,15 @@ const AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const MODEL_CHAT = 'google/gemini-2.5-flash';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash';
 
+const HTML_FORMAT_RULES =
+  '\n\nFORMATTING RULES FOR ALL TEXT FIELDS:\n' +
+  '- Do NOT use Markdown. No **bold**, *italics*, # headings, bullet markers (- or *), backticks, or underscores.\n' +
+  '- Write clean, semantic HTML inside string fields. Allowed tags: <p>, <br>, <strong>, <em>, <ul>, <ol>, <li>, <h3>, <h4>, <code>, <pre>, <blockquote>, <dl>, <dt>, <dd>, <sup>, <sub>.\n' +
+  '- For definitions, wrap the term in <strong> followed by the explanation in the same paragraph or in <dt>/<dd>.\n' +
+  '- For array-of-string fields (bullets, takeaways, options, etc.), each entry is plain inline HTML (no <ul>/<li> wrapper).\n' +
+  '- Never output raw symbols like **, *, #, _ or backticks as formatting.\n' +
+  '- Output valid HTML only in text content.';
+
 function jsonResponse(payload: unknown, status = 200) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -143,7 +152,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.',
+          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.' + HTML_FORMAT_RULES,
         user: userPayload,
       });
     }
@@ -161,7 +170,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You generate exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.',
+          'You generate exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material. Return ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES,
         user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (only for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
         maxTokens: 3500,
       });
@@ -175,7 +184,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are a strict but fair grader. Return ONLY valid JSON matching the schema. No prose.',
+          'You are a strict but fair grader. Return ONLY valid JSON matching the schema. No prose.' + HTML_FORMAT_RULES,
         user: `Questions:\n${truncate(questions)}\n\nUser answers (keyed by question id):\n${truncate(userAnswers)}\n\nReturn JSON:\n{\n  "score": number,\n  "totalQuestions": number,\n  "percentage": number,\n  "answers": [{"questionId": string, "isCorrect": boolean, "userAnswer": string, "correctAnswer": string, "explanation": string}],\n  "weakTopics": string[],\n  "recommendations": string[]\n}`,
         maxTokens: 3000,
       });
@@ -188,7 +197,7 @@ async function handleEndpoint(
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You are an expert study planner. Return ONLY valid JSON.',
+        system: 'You are an expert study planner. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `Create an hour-by-hour study plan for ${hours} hours until the exam.\nWeak topics: ${weak.join(', ') || 'none specified'}\n\nMaterial:\n${content}\n\nReturn JSON:\n{\n  "id": string,\n  "hoursUntilExam": number,\n  "schedule": [{"hour": number, "topic": string, "activity": string, "isBreak": boolean, "completed": false}],\n  "tips": string[]\n}`,
         maxTokens: 3000,
       });
@@ -199,7 +208,7 @@ async function handleEndpoint(
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create concise last-minute exam review sheets. Return ONLY valid JSON.',
+        system: 'You create concise last-minute exam review sheets. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `Material:\n${content}\n\nReturn JSON:\n{\n  "keyPoints": string[],\n  "mustKnow": string[],\n  "quickFormulas": string[],\n  "commonMistakes": string[],\n  "confidenceBooster": string\n}`,
       });
     }
@@ -211,7 +220,7 @@ async function handleEndpoint(
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.',
+        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `${ctx}Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts in the material above. Match the depth to the exam level/board if provided.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
         maxTokens: 3000,
       });
@@ -224,7 +233,7 @@ async function handleEndpoint(
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.',
+        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
         maxTokens: 2500,
       });
@@ -237,7 +246,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.',
+          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "title": string,\n  "overview": string,\n  "sections": [{"heading": string, "body": string, "bullets": string[], "examples": string[]}],\n  "keyTakeaways": string[]\n}\n\nProduce 4-8 sections. Each section should have a body paragraph PLUS bullets. Include examples where helpful. Empty arrays are allowed but prefer rich content.`,
         maxTokens: 4000,
       });
@@ -267,6 +276,7 @@ async function handleEndpoint(
 
       let system =
         'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
+      system += HTML_FORMAT_RULES;
       let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {
