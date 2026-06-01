@@ -21,19 +21,25 @@ import { useNavigate } from 'react-router-dom';
 
 export default function Diagnostic() {
   const navigate = useNavigate();
-  const { setWeakTopics } = useStudyStore();
-  
+  const { setWeakTopics, diagnosticState, setDiagnosticState } = useStudyStore();
+
   const [isGenerating, setIsGenerating] = useState(false);
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
-  const [isCompleted, setIsCompleted] = useState(false);
-  const [results, setResults] = useState<{
-    score: number;
-    percentage: number;
-    weakTopics: string[];
-    recommendations: string[];
-  } | null>(null);
+
+  const questions = diagnosticState?.questions ?? [];
+  const currentIndex = diagnosticState?.currentIndex ?? 0;
+  const userAnswers = diagnosticState?.userAnswers ?? {};
+  const isCompleted = diagnosticState?.isCompleted ?? false;
+  const results = diagnosticState?.results ?? null;
+
+  const update = (patch: Partial<NonNullable<typeof diagnosticState>>) => {
+    setDiagnosticState({
+      questions: patch.questions ?? questions,
+      currentIndex: patch.currentIndex ?? currentIndex,
+      userAnswers: patch.userAnswers ?? userAnswers,
+      isCompleted: patch.isCompleted ?? isCompleted,
+      results: patch.results ?? results,
+    });
+  };
 
   const handleStart = async () => {
     setIsGenerating(true);
@@ -48,7 +54,13 @@ export default function Diagnostic() {
     }
 
     if (response.data) {
-      setQuestions(response.data);
+      setDiagnosticState({
+        questions: response.data,
+        currentIndex: 0,
+        userAnswers: {},
+        isCompleted: false,
+        results: null,
+      });
       toast.success('Diagnostic test ready! Good luck!');
     }
     
@@ -57,12 +69,12 @@ export default function Diagnostic() {
 
   const handleAnswer = (answer: string) => {
     const currentQuestion = questions[currentIndex];
-    setUserAnswers(prev => ({ ...prev, [currentQuestion.id]: answer }));
+    update({ userAnswers: { ...userAnswers, [currentQuestion.id]: answer } });
   };
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+      update({ currentIndex: currentIndex + 1 });
     } else {
       // Calculate results
       calculateResults();
@@ -100,21 +112,19 @@ export default function Diagnostic() {
     }
 
     setWeakTopics(sortedWeakTopics);
-    setResults({
-      score: correct,
-      percentage,
-      weakTopics: sortedWeakTopics,
-      recommendations,
+    update({
+      isCompleted: true,
+      results: {
+        score: correct,
+        percentage,
+        weakTopics: sortedWeakTopics,
+        recommendations,
+      },
     });
-    setIsCompleted(true);
   };
 
   const handleReset = () => {
-    setQuestions([]);
-    setCurrentIndex(0);
-    setUserAnswers({});
-    setIsCompleted(false);
-    setResults(null);
+    setDiagnosticState(null);
   };
 
   const currentQuestion = questions[currentIndex];
