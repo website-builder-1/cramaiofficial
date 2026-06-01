@@ -5,6 +5,7 @@ import { NotebookPen, Sparkles, Download, Copy } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { generateNotes, type NotesResult } from '@/lib/api';
 import { toast } from 'sonner';
+import { RichText } from '@/components/RichText';
 
 export default function Notes() {
   const { getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
@@ -38,20 +39,20 @@ export default function Notes() {
 
   const buildMarkdown = (n: NotesResult) => {
     const lines: string[] = [];
-    lines.push(`# ${n.title}`);
-    if (n.overview) lines.push(`\n${n.overview}\n`);
+    lines.push(`<h1>${n.title}</h1>`);
+    if (n.overview) lines.push(`<p>${n.overview}</p>`);
     n.sections?.forEach((s) => {
-      lines.push(`\n## ${s.heading}\n`);
-      if (s.body) lines.push(s.body);
-      if (s.bullets?.length) lines.push(s.bullets.map((b) => `- ${b}`).join('\n'));
+      lines.push(`<h2>${s.heading}</h2>`);
+      if (s.body) lines.push(`<div>${s.body}</div>`);
+      if (s.bullets?.length) lines.push(`<ul>${s.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>`);
       if (s.examples?.length) {
-        lines.push(`\n**Examples:**`);
-        lines.push(s.examples.map((e) => `- ${e}`).join('\n'));
+        lines.push(`<p><strong>Examples:</strong></p>`);
+        lines.push(`<ul>${s.examples.map((e) => `<li>${e}</li>`).join('')}</ul>`);
       }
     });
     if (n.keyTakeaways?.length) {
-      lines.push(`\n## Key Takeaways\n`);
-      lines.push(n.keyTakeaways.map((b) => `- ${b}`).join('\n'));
+      lines.push(`<h2>Key Takeaways</h2>`);
+      lines.push(`<ul>${n.keyTakeaways.map((b) => `<li>${b}</li>`).join('')}</ul>`);
     }
     return lines.join('\n');
   };
@@ -64,11 +65,11 @@ export default function Notes() {
 
   const download = () => {
     if (!data) return;
-    const blob = new Blob([buildMarkdown(data)], { type: 'text/markdown' });
+    const blob = new Blob([buildMarkdown(data)], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${(data.title || 'notes').replace(/[^a-z0-9-_ ]/gi, '').slice(0, 60)}.md`;
+    a.download = `${(data.title || 'notes').replace(/[^a-z0-9-_ ]/gi, '').slice(0, 60)}.html`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -109,7 +110,7 @@ export default function Notes() {
                 <Copy className="w-4 h-4" /> Copy
               </Button>
               <Button variant="outline" size="sm" onClick={download} className="gap-2">
-                <Download className="w-4 h-4" /> Download .md
+                <Download className="w-4 h-4" /> Download .html
               </Button>
               <Button variant="outline" size="sm" onClick={handleGenerate} className="gap-2">
                 <Sparkles className="w-4 h-4" /> Regenerate
@@ -118,23 +119,23 @@ export default function Notes() {
 
             <div className="glass-card rounded-xl p-6">
               <h2 className="text-2xl font-bold mb-3 gradient-text">{data.title}</h2>
-              {data.overview && <p className="text-muted-foreground whitespace-pre-wrap">{data.overview}</p>}
+              {data.overview && <RichText html={data.overview} className="text-muted-foreground" />}
             </div>
 
             {data.sections?.map((s, i) => (
               <div key={i} className="glass-card rounded-xl p-6">
                 <h3 className="text-lg font-semibold mb-3">{s.heading}</h3>
-                {s.body && <p className="text-foreground whitespace-pre-wrap mb-3">{s.body}</p>}
+                {s.body && <RichText html={s.body} className="text-foreground mb-3" />}
                 {s.bullets?.length > 0 && (
                   <ul className="list-disc pl-5 space-y-1.5 text-foreground">
-                    {s.bullets.map((b, j) => <li key={j}>{b}</li>)}
+                    {s.bullets.map((b, j) => <li key={j}><RichText html={b} as="span" /></li>)}
                   </ul>
                 )}
                 {s.examples?.length > 0 && (
                   <div className="mt-4 p-3 rounded-lg bg-muted/50">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Examples</p>
                     <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
-                      {s.examples.map((e, j) => <li key={j}>{e}</li>)}
+                      {s.examples.map((e, j) => <li key={j}><RichText html={e} as="span" /></li>)}
                     </ul>
                   </div>
                 )}
@@ -145,7 +146,7 @@ export default function Notes() {
               <div className="glass-card rounded-xl p-6">
                 <h3 className="text-lg font-semibold mb-3 gradient-text">Key Takeaways</h3>
                 <ul className="list-disc pl-5 space-y-1.5 text-foreground">
-                  {data.keyTakeaways.map((b, i) => <li key={i}>{b}</li>)}
+                  {data.keyTakeaways.map((b, i) => <li key={i}><RichText html={b} as="span" /></li>)}
                 </ul>
               </div>
             )}
