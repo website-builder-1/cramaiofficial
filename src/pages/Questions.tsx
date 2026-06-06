@@ -26,6 +26,7 @@ import { useStudyStore } from '@/lib/store';
 import { type Question, generateQuestions, gradeAnswers } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichText } from '@/components/RichText';
 
 const questionTypes = [
   { id: 'multiple-choice', label: 'Multiple Choice' },
@@ -352,7 +353,7 @@ export default function Questions() {
                           <span className="text-xs text-muted-foreground">{question.topic}</span>
                           <span className="text-xs text-muted-foreground capitalize">· {question.type.replace('-', ' ')}</span>
                         </div>
-                        <p className="font-medium text-foreground">{question.question}</p>
+                        <RichText html={question.question} className="font-medium text-foreground" />
                       </div>
                     </div>
 
@@ -381,7 +382,7 @@ export default function Questions() {
                               htmlFor={`${question.id}-${i}`}
                               className="flex-1 cursor-pointer font-normal"
                             >
-                              {option}
+                              <RichText html={option} as="span" />
                             </Label>
                             {isGraded && option === question.correctAnswer && (
                               <CheckCircle2 className="w-5 h-5 text-success" />
@@ -420,9 +421,13 @@ export default function Questions() {
                                 <><XCircle className="w-4 h-4 text-destructive" /> <span className="text-destructive">Needs work</span></>
                               )}
                             </div>
-                            <p className="text-foreground">
-                              <strong>Reference answer:</strong> {gradedById[question.id].correctAnswer || question.correctAnswer}
-                            </p>
+                            <div className="text-foreground">
+                              <strong>Reference answer:</strong>{' '}
+                              <RichText
+                                html={gradedById[question.id].correctAnswer || question.correctAnswer}
+                                as="span"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -430,9 +435,13 @@ export default function Questions() {
 
                     {isGraded && (gradedById[question.id]?.explanation || question.explanation) && (
                       <div className="mt-4 ml-12 p-4 rounded-lg bg-muted/50">
-                        <p className="text-sm text-muted-foreground">
-                          <strong className="text-foreground">Explanation:</strong> {gradedById[question.id]?.explanation || question.explanation}
-                        </p>
+                        <div className="text-sm text-muted-foreground">
+                          <strong className="text-foreground">Explanation:</strong>{' '}
+                          <RichText
+                            html={gradedById[question.id]?.explanation || question.explanation || ''}
+                            as="span"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>

@@ -18,6 +18,7 @@ import { type Question, runDiagnosticTest } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { RichText } from '@/components/RichText';
 
 export default function Diagnostic() {
   const navigate = useNavigate();
@@ -237,7 +238,7 @@ export default function Diagnostic() {
                 {results.recommendations.map((rec, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <CheckCircle2 className="w-5 h-5 text-success shrink-0" />
-                    <p className="text-muted-foreground">{rec}</p>
+                    <RichText html={rec} className="text-muted-foreground" as="span" />
                   </div>
                 ))}
               </div>
@@ -264,12 +265,14 @@ export default function Diagnostic() {
                           <XCircle className="w-5 h-5 text-destructive shrink-0" />
                         )}
                         <div className="flex-1">
-                          <p className="font-medium text-sm mb-1">{q.question}</p>
+                          <RichText html={q.question} className="font-medium text-sm mb-1" />
                           {!isCorrect && (
-                            <p className="text-xs text-muted-foreground">
-                              <span className="text-destructive">Your answer:</span> {userAnswers[q.id]} | 
-                              <span className="text-success"> Correct:</span> {q.correctAnswer}
-                            </p>
+                            <div className="text-xs text-muted-foreground">
+                              <span className="text-destructive">Your answer:</span>{' '}
+                              <RichText html={userAnswers[q.id] || ''} as="span" /> |{' '}
+                              <span className="text-success">Correct:</span>{' '}
+                              <RichText html={q.correctAnswer} as="span" />
+                            </div>
                           )}
                         </div>
                       </div>
@@ -332,7 +335,7 @@ export default function Diagnostic() {
                 {currentQuestion.difficulty}
               </div>
               
-              <h3 className="text-lg font-semibold mb-6">{currentQuestion.question}</h3>
+              <RichText html={currentQuestion.question} className="text-lg font-semibold mb-6" />
 
               <RadioGroup
                 value={userAnswers[currentQuestion.id] || ''}
@@ -352,7 +355,7 @@ export default function Diagnostic() {
                   >
                     <RadioGroupItem value={option} id={`option-${i}`} />
                     <Label htmlFor={`option-${i}`} className="flex-1 cursor-pointer font-normal">
-                      {option}
+                      <RichText html={option} as="span" />
                     </Label>
                   </div>
                 ))}
