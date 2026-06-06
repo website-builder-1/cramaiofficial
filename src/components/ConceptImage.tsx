@@ -38,17 +38,32 @@ export function ConceptImage({ prompt, cacheKey, label = 'Generate visualization
     return (
       <div className={className}>
         <div className="relative rounded-xl overflow-hidden border border-border bg-muted">
-          <img src={cached} alt={prompt} className="w-full h-auto" loading="lazy" />
+          <img
+            src={cached}
+            alt={prompt}
+            className={`w-full h-auto transition-opacity ${loading ? 'opacity-40' : ''}`}
+            loading="lazy"
+          />
+          {loading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/40 backdrop-blur-sm">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              <p className="text-xs text-foreground/80">Regenerating…</p>
+            </div>
+          )}
           <Button
+            type="button"
             variant="outline"
             size="sm"
-            onClick={run}
+            onClick={(e) => { e.preventDefault(); e.stopPropagation(); run(); }}
             disabled={loading}
-            className="absolute top-2 right-2 gap-1.5 backdrop-blur bg-background/80"
+            className="absolute top-2 right-2 gap-1.5 backdrop-blur bg-background/80 z-10"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Regenerate
           </Button>
         </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5 italic text-center">
+          CramAI's images are AI-generated and may not always be accurate — verify details against your notes.
+        </p>
       </div>
     );
   }
