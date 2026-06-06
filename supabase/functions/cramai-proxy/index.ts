@@ -301,7 +301,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an ADHD-aware study coach. Break study material into micro-steps of 2-5 minutes each. Each step must be tiny, concrete, and immediately doable. End each step with a one-line "reward" (what the user will be able to do once finished). Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You are an ADHD-aware study coach. Break study material into micro-steps of 2-5 minutes each. Each step must be tiny, concrete, and immediately doable. End each step with a one-line "reward" (what the user will be able to do once finished). Return ONLY valid JSON.' + HTML_FORMAT_RULES + adhdSystem(body),
         user: `Topic: ${topic}\n\nMaterial:\n${content}\n\nReturn JSON: {"steps": [{"id": string, "title": string, "detail": string, "minutes": number, "reward": string}]}\n\nProduce 4-8 micro-steps. Keep titles under 10 words. "detail" is 1 short sentence. "minutes" between 2 and 5.`,
         maxTokens: 1500,
       });
@@ -313,7 +313,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You help ADHD students beat task-paralysis. Pick the SINGLE easiest, smallest, most rewarding 2-minute starter task from the provided material. No choices, no options, no menu. One task only. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You help ADHD students beat task-paralysis. Pick the SINGLE easiest, smallest, most rewarding 2-minute starter task from the provided material. No choices, no options, no menu. One task only. Return ONLY valid JSON.' + HTML_FORMAT_RULES + adhdSystem(body),
         user: `Material:\n${content}\n\nReturn JSON: {"task": string, "why": string, "minutes": 2}\n\n"task" is the literal action (1 short sentence, e.g. "Read this one definition: ..." or "Try to recall what X means without looking"). "why" is a 1-line encouragement.`,
         maxTokens: 400,
       });
@@ -448,6 +448,7 @@ async function handleEndpoint(
       let system =
         'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
       system += HTML_FORMAT_RULES;
+      system += adhdSystem(body);
       let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {
