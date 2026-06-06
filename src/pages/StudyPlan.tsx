@@ -9,13 +9,12 @@ import {
   Coffee,
   BookOpen,
   Sparkles,
-  FileText,
   ChevronRight,
   CheckCircle2,
   Zap
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type StudyPlan, type LastMinuteReview, createStudyPlan, getLastMinuteReview } from '@/lib/api';
+import { type StudyPlan, createStudyPlan } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
@@ -25,8 +24,6 @@ export default function StudyPlanPage() {
   
   const [hoursUntilExam, setHoursUntilExam] = useState(8);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingReview, setIsGeneratingReview] = useState(false);
-  const [lastMinuteReview, setLastMinuteReview] = useState<LastMinuteReview | null>(null);
   const [localPlan, setLocalPlan] = useState<StudyPlan | null>(studyPlan);
 
   const handleGeneratePlan = async () => {
@@ -64,25 +61,6 @@ export default function StudyPlanPage() {
       setLocalPlan(updatedPlan);
     }
     toggleHourComplete(hour);
-  };
-
-  const handleGenerateReview = async () => {
-    setIsGeneratingReview(true);
-
-    const response = await getLastMinuteReview(documentContent || '');
-
-    if (response.error) {
-      toast.error(response.error);
-      setIsGeneratingReview(false);
-      return;
-    }
-
-    if (response.data) {
-      setLastMinuteReview(response.data);
-      toast.success('Last-minute review generated!');
-    }
-    
-    setIsGeneratingReview(false);
   };
 
   const completedCount = localPlan?.schedule.filter(s => s.completed).length || 0;
@@ -228,75 +206,11 @@ export default function StudyPlanPage() {
                   </div>
                 </div>
 
-                {/* Last Minute Review */}
-                <Button
-                  onClick={handleGenerateReview}
-                  variant="outline"
-                  size="lg"
-                  className="w-full gap-2"
-                  disabled={isGeneratingReview}
-                >
-                  <FileText className="w-5 h-5" />
-                  {isGeneratingReview ? 'Generating...' : 'Generate Last-Minute Review Sheet'}
-                </Button>
-
-                {lastMinuteReview && (
-                  <div className="glass-card rounded-xl p-6 space-y-6 animate-slide-up">
-                    <h3 className="text-xl font-bold gradient-text text-center">📝 Last-Minute Review Sheet</h3>
-                    
-                    <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-primary" />
-                        Key Points
-                      </h4>
-                      <ul className="space-y-1">
-                        {lastMinuteReview.keyPoints.map((point, i) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                            <span className="text-primary">•</span>
-                            <RichText html={point} as="span" />
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold mb-2 flex items-center gap-2">
-                        <BookOpen className="w-4 h-4 text-success" />
-                        Must Know
-                      </h4>
-                      <ul className="space-y-1">
-                        {lastMinuteReview.mustKnow.map((item, i) => (
-                          <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                            <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                            <RichText html={item} as="span" />
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold mb-2">Quick Formulas</h4>
-                      <div className="space-y-2">
-                        {lastMinuteReview.quickFormulas.map((formula, i) => (
-                          <div key={i} className="p-2 bg-muted rounded-lg font-mono text-sm">
-                            <RichText html={formula} as="span" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl gradient-bg text-primary-foreground text-center">
-                      <RichText html={lastMinuteReview.confidenceBooster} className="font-medium" />
-                    </div>
-                  </div>
-                )}
-
                 {/* Reset Button */}
                 <Button
                   onClick={() => {
                     setLocalPlan(null);
                     setStudyPlan(null);
-                    setLastMinuteReview(null);
                   }}
                   variant="ghost"
                   size="sm"

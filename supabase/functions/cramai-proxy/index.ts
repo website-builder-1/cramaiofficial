@@ -157,17 +157,13 @@ async function handleEndpoint(
       });
     }
 
-    case '/api/questions/generate':
-    case '/api/questions/diagnostic': {
+    case '/api/questions/generate': {
       const content = truncate(body.content);
       const count = Number(body.count) || 10;
       const difficulty = asNonEmptyString(body.difficulty) || 'mixed';
-      // Diagnostic UI only supports choice-style answers — force MC/TF there.
-      const types = endpoint === '/api/questions/diagnostic'
-        ? ['multiple-choice', 'true-false']
-        : (Array.isArray(body.types) && body.types.length
-            ? body.types
-            : ['multiple-choice', 'short-answer', 'true-false']);
+      const types = Array.isArray(body.types) && body.types.length
+        ? body.types
+        : ['multiple-choice', 'short-answer', 'true-false'];
       const ctx = contextBlock(body);
       const parsed = await callAIJSON({
         apiKey,
@@ -203,16 +199,6 @@ async function handleEndpoint(
         system: 'You are an expert study planner. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
         user: `Create an hour-by-hour study plan for ${hours} hours until the exam.\nWeak topics: ${weak.join(', ') || 'none specified'}\n\nMaterial:\n${content}\n\nReturn JSON:\n{\n  "id": string,\n  "hoursUntilExam": number,\n  "schedule": [{"hour": number, "topic": string, "activity": string, "isBreak": boolean, "completed": false}],\n  "tips": string[]\n}`,
         maxTokens: 3000,
-      });
-    }
-
-    case '/api/study-plan/last-minute-review': {
-      const content = truncate(body.content);
-      return await callAIJSON({
-        apiKey,
-        model: MODEL_STRUCTURED,
-        system: 'You create concise last-minute exam review sheets. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
-        user: `Material:\n${content}\n\nReturn JSON:\n{\n  "keyPoints": string[],\n  "mustKnow": string[],\n  "quickFormulas": string[],\n  "commonMistakes": string[],\n  "confidenceBooster": string\n}`,
       });
     }
 

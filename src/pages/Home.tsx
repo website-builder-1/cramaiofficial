@@ -132,10 +132,10 @@ export default function Home() {
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
-              <Link to="/diagnostic">
+              <Link to="/notes">
                 <Button variant="outline" size="xl" className="gap-2 w-full sm:w-auto">
                   <Zap className="w-5 h-5" />
-                  Take Diagnostic Test
+                  Generate Study Notes
                 </Button>
               </Link>
             </div>
