@@ -336,9 +336,35 @@ async function handleEndpoint(
       const prompt = asNonEmptyString(body.prompt);
       if (!prompt) throw new Error('Missing prompt');
       const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
-      const enhanced = `${prompt}, minimalist educational diagram, labeled, flat vector illustration, clean white background, high clarity, study material, no text artifacts`;
+      const enhanced = `Educational diagram: ${prompt}. Clean minimalist flat vector illustration, labeled parts with clear legible English text labels, simple sans-serif typography, high contrast, white background, study textbook style. Avoid gibberish text, avoid misspelled words — if uncertain about text, omit text entirely and use icons/shapes only.`;
 
       let lastErr = '';
+
+      // PRIMARY: Lovable AI Gateway gpt-image-2 (best text legibility, no extra key needed)
+      try {
+        const res = await fetch('https://ai.gateway.lovable.dev/v1/images/generations', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'openai/gpt-image-2',
+            prompt: enhanced,
+            size: '1024x1024',
+            quality: 'low',
+            n: 1,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const b64: string | undefined = data?.data?.[0]?.b64_json;
+          if (b64) return { image: `data:image/png;base64,${b64}`, model: 'openai/gpt-image-2' };
+          lastErr = 'gpt-image-2 returned no image';
+        } else {
+          lastErr = `gpt-image-2 ${res.status}: ${(await res.text()).slice(0, 200)}`;
+        }
+      } catch (e) {
+        lastErr = `gpt-image-2 failed: ${e instanceof Error ? e.message : String(e)}`;
+      }
+
       if (hfKey) {
         outer: for (const host of HF_HOSTS) {
           for (const model of HF_IMAGE_MODELS) {
