@@ -18,6 +18,7 @@ import {
 
 } from 'lucide-react';
 import heroBg from '@/assets/hero-bg.jpg';
+import { JustStartButton } from '@/components/JustStartButton';
 
 const features = [
   {
@@ -138,6 +139,14 @@ export default function Home() {
                   Generate Study Notes
                 </Button>
               </Link>
+            </div>
+
+            {/* ADHD-friendly: Just Start */}
+            <div className="pt-4 animate-slide-up" style={{ animationDelay: '0.25s' }}>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Can't get started? Let the AI pick one tiny task</p>
+              <div className="flex justify-center">
+                <JustStartButton variant="outline" size="lg" />
+              </div>
             </div>
 
             {/* Trust indicators */}
