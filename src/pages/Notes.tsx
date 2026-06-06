@@ -118,13 +118,13 @@ export default function Notes() {
             </div>
 
             <div className="glass-card rounded-xl p-6">
-              <h2 className="text-2xl font-bold mb-3 gradient-text">{data.title}</h2>
+              <RichText html={data.title} as="h2" className="text-2xl font-bold mb-3 gradient-text" />
               {data.overview && <RichText html={data.overview} className="text-muted-foreground" />}
             </div>
 
             {data.sections?.map((s, i) => (
               <div key={i} className="glass-card rounded-xl p-6">
-                <h3 className="text-lg font-semibold mb-3">{s.heading}</h3>
+                <RichText html={s.heading} as="h3" className="text-lg font-semibold mb-3" />
                 {s.body && <RichText html={s.body} className="text-foreground mb-3" />}
                 {s.bullets?.length > 0 && (
                   <ul className="list-disc pl-5 space-y-1.5 text-foreground">
