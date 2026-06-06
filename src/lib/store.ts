@@ -25,21 +25,6 @@ export interface QuestionsState {
   gradeResult: GradeResult | null;
 }
 
-export interface DiagnosticResults {
-  score: number;
-  percentage: number;
-  weakTopics: string[];
-  recommendations: string[];
-}
-
-export interface DiagnosticState {
-  questions: Question[];
-  currentIndex: number;
-  userAnswers: Record<string, string>;
-  isCompleted: boolean;
-  results: DiagnosticResults | null;
-}
-
 interface StudyState {
   // Document content
   documentContent: string;
@@ -78,9 +63,6 @@ interface StudyState {
 
   questionsState: QuestionsState | null;
   setQuestionsState: (state: QuestionsState | null) => void;
-
-  diagnosticState: DiagnosticState | null;
-  setDiagnosticState: (state: DiagnosticState | null) => void;
 
   // Reset only the generated content (used when new material is analyzed)
   resetGeneratedContent: () => void;
@@ -158,16 +140,12 @@ export const useStudyStore = create<StudyState>()(
       questionsState: null,
       setQuestionsState: (questionsState) => set({ questionsState }),
 
-      diagnosticState: null,
-      setDiagnosticState: (diagnosticState) => set({ diagnosticState }),
-
       resetGeneratedContent: () =>
         set({
           notesData: null,
           summaryData: null,
           flashcardsState: null,
           questionsState: null,
-          diagnosticState: null,
           questions: [],
           studyPlan: null,
           weakTopics: [],
@@ -211,7 +189,6 @@ export const useStudyStore = create<StudyState>()(
           summaryData: null,
           flashcardsState: null,
           questionsState: null,
-          diagnosticState: null,
         }),
     }),
     {

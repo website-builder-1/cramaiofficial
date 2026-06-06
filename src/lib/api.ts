@@ -113,13 +113,6 @@ export async function generateQuestions(params: {
   return apiRequest<Question[]>('/api/questions/generate', params);
 }
 
-export async function runDiagnosticTest(
-  content: string,
-  subject: string
-): Promise<ApiResponse<Question[]>> {
-  return apiRequest<Question[]>('/api/questions/diagnostic', { content, subject });
-}
-
 export async function gradeAnswers(
   questions: Question[],
   userAnswers: Record<string, string>
@@ -133,12 +126,6 @@ export async function createStudyPlan(params: {
   weakTopics?: string[];
 }): Promise<ApiResponse<StudyPlan>> {
   return apiRequest<StudyPlan>('/api/study-plan/create', params);
-}
-
-export async function getLastMinuteReview(
-  content: string
-): Promise<ApiResponse<LastMinuteReview>> {
-  return apiRequest<LastMinuteReview>('/api/study-plan/last-minute-review', { content });
 }
 
 export async function sendChatMessage(
