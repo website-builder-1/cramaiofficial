@@ -14,6 +14,15 @@ const HF_IMAGE_MODELS = [
   'stabilityai/stable-diffusion-xl-base-1.0',
 ];
 
+// HuggingFace migrated away from api-inference.huggingface.co to the
+// Inference Providers router. We try the router first; if that fails for
+// network reasons we fall back to the legacy host, then finally to the
+// Lovable AI Gateway image model so visuals still work.
+const HF_HOSTS = [
+  'https://router.huggingface.co/hf-inference/models',
+  'https://api-inference.huggingface.co/models',
+];
+
 const HTML_FORMAT_RULES =
   '\n\nFORMATTING RULES FOR ALL TEXT FIELDS:\n' +
   '- Do NOT use Markdown. No **bold**, *italics*, # headings, bullet markers (- or *), backticks, or underscores.\n' +

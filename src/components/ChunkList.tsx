@@ -35,12 +35,17 @@ export function ChunkList({ content, topic }: Props) {
   };
 
   const toggle = (id: string) => {
+    let earned = false;
     setDone((prev) => {
       const n = new Set(prev);
       if (n.has(id)) n.delete(id);
-      else { n.add(id); awardXp(5); }
+      else { n.add(id); earned = true; }
       return n;
     });
+    if (earned) {
+      // Defer to avoid setState-in-render (zustand) warnings
+      queueMicrotask(() => awardXp(5));
+    }
   };
 
   if (!steps) {
