@@ -9,6 +9,8 @@ import type {
   SummaryResult,
   NotesResult,
   GradeResult,
+  SyllabusContext,
+  PastPaperContext,
 } from './api';
 
 export interface FlashcardsState {
@@ -46,7 +48,7 @@ export interface FocusSessionState {
 }
 
 export type ChunkStyle = 'tiny' | 'standard' | 'deep';
-export type CoachTone = 'gentle' | 'direct' | 'playful';
+export type CoachTone = 'gentle' | 'direct' | 'playful' | 'coach' | 'dry';
 export type AttentionSpan = 'short' | 'medium' | 'long';
 
 export interface AdhdProfile {
@@ -59,6 +61,12 @@ export interface AdhdProfile {
   rewardsOn: boolean;
   brownNoise: boolean;
   preferVisuals: boolean;
+  // Newly added
+  voiceFirst: boolean;
+  scratchpadOn: boolean;
+  driftOn: boolean;
+  hyperfocusMinutes: 0 | 30 | 45 | 60; // 0 = off
+  hallucinationCheck: boolean;
 }
 
 export const DEFAULT_ADHD_PROFILE: AdhdProfile = {
@@ -71,7 +79,19 @@ export const DEFAULT_ADHD_PROFILE: AdhdProfile = {
   rewardsOn: true,
   brownNoise: false,
   preferVisuals: true,
+  voiceFirst: false,
+  scratchpadOn: false,
+  driftOn: true,
+  hyperfocusMinutes: 45,
+  hallucinationCheck: true,
 };
+
+export interface LastContext {
+  route: string;
+  label: string; // human-readable
+  scrollY?: number;
+  ts: number;
+}
 
 interface StudyState {
   // Document content
@@ -90,6 +110,15 @@ interface StudyState {
 
   examBoard: string;
   setExamBoard: (board: string) => void;
+
+  syllabusCode: string;
+  setSyllabusCode: (code: string) => void;
+
+  syllabusContext: SyllabusContext | null;
+  setSyllabusContext: (ctx: SyllabusContext | null) => void;
+
+  pastPaperContext: PastPaperContext | null;
+  setPastPaperContext: (ctx: PastPaperContext | null) => void;
   
   // Analysis results
   analysisResult: AnalysisResult | null;
@@ -148,6 +177,25 @@ interface StudyState {
   
   // Reset all
   resetAll: () => void;
+
+  // Re-entry: last context per route
+  lastContexts: Record<string, LastContext>;
+  setLastContext: (route: string, ctx: Omit<LastContext, 'route' | 'ts'>) => void;
+  lastVisitedRoute: string;
+  setLastVisitedRoute: (route: string) => void;
+
+  // Active study timer (for time pill + hyperfocus brake)
+  activeStudySeconds: number;
+  addActiveStudySeconds: (sec: number) => void;
+  resetActiveStudySeconds: () => void;
+
+  // Scratchpad notes per route
+  scratchpads: Record<string, string>;
+  setScratchpad: (route: string, text: string) => void;
+
+  // Weekly momentum (shame-free streak)
+  recentStudyDays: string[]; // YYYY-MM-DD dates of recent activity (last 30)
+  markStudyToday: () => void;
 }
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -189,7 +237,16 @@ export const useStudyStore = create<StudyState>()(
 
       examBoard: '',
       setExamBoard: (examBoard) => set({ examBoard }),
-      
+
+      syllabusCode: '',
+      setSyllabusCode: (syllabusCode) => set({ syllabusCode }),
+
+      syllabusContext: null,
+      setSyllabusContext: (syllabusContext) => set({ syllabusContext }),
+
+      pastPaperContext: null,
+      setPastPaperContext: (pastPaperContext) => set({ pastPaperContext }),
+
       analysisResult: null,
       setAnalysisResult: (result) => set({ analysisResult: result }),
       
@@ -241,7 +298,8 @@ export const useStudyStore = create<StudyState>()(
           const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
           if (g.lastActiveDate === yesterday) streak = g.streak + 1;
           else if (!g.lastActiveDate) streak = 1;
-          else streak = 1;
+          // Shame-free: never reset to 0 visibly. Keep momentum: cap dip at max(1, streak-1).
+          else streak = Math.max(1, g.streak);
         }
         const todayXp = g.todayDate === today ? g.todayXp + amount : amount;
         const xp = g.xp + amount;
@@ -268,6 +326,12 @@ export const useStudyStore = create<StudyState>()(
             todayDate: today,
           },
         });
+        // Track recent study days (last 30)
+        const cur = get().recentStudyDays || [];
+        if (!cur.includes(today)) {
+          const next = [...cur, today].slice(-30);
+          set({ recentStudyDays: next });
+        }
         return { leveledUp, newLevel: level };
       },
 
@@ -346,10 +410,64 @@ export const useStudyStore = create<StudyState>()(
           summaryData: null,
           flashcardsState: null,
           questionsState: null,
+          syllabusCode: '',
+          syllabusContext: null,
+          pastPaperContext: null,
+        }),
+
+      lastContexts: {},
+      setLastContext: (route, ctx) =>
+        set((s) => ({
+          lastContexts: {
+            ...s.lastContexts,
+            [route]: { route, ts: Date.now(), ...ctx },
+          },
+        })),
+      lastVisitedRoute: '',
+      setLastVisitedRoute: (route) => set({ lastVisitedRoute: route }),
+
+      activeStudySeconds: 0,
+      addActiveStudySeconds: (sec) =>
+        set((s) => ({ activeStudySeconds: s.activeStudySeconds + sec })),
+      resetActiveStudySeconds: () => set({ activeStudySeconds: 0 }),
+
+      scratchpads: {},
+      setScratchpad: (route, text) =>
+        set((s) => ({ scratchpads: { ...s.scratchpads, [route]: text } })),
+
+      recentStudyDays: [],
+      markStudyToday: () =>
+        set((s) => {
+          const today = todayStr();
+          if (s.recentStudyDays.includes(today)) return s;
+          return { recentStudyDays: [...s.recentStudyDays, today].slice(-30) };
         }),
     }),
     {
       name: 'cramai-study-store',
+      // Persist only lightweight slices. Heavy/transient content lives in memory
+      // so we never overflow localStorage (5MB).
+      partialize: (s) => ({
+        subject: s.subject,
+        examLevel: s.examLevel,
+        examBoard: s.examBoard,
+        syllabusCode: s.syllabusCode,
+        gamification: s.gamification,
+        adhdProfile: s.adhdProfile,
+        focus: {
+          workSec: s.focus.workSec,
+          breakSec: s.focus.breakSec,
+          durationSec: s.focus.durationSec,
+          sound: s.focus.sound,
+          focusModeUI: s.focus.focusModeUI,
+          active: false,
+          mode: 'work' as const,
+          startedAt: 0,
+        },
+        scratchpads: s.scratchpads,
+        recentStudyDays: s.recentStudyDays,
+        lastVisitedRoute: s.lastVisitedRoute,
+      }),
     }
   )
 );
