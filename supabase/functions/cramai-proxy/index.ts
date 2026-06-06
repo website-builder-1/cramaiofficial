@@ -297,54 +297,90 @@ async function handleEndpoint(
       const prompt = asNonEmptyString(body.prompt);
       if (!prompt) throw new Error('Missing prompt');
       const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
-      if (!hfKey) throw new Error('HUGGINGFACE_API_KEY is not configured.');
-
       const enhanced = `${prompt}, minimalist educational diagram, labeled, flat vector illustration, clean white background, high clarity, study material, no text artifacts`;
 
       let lastErr = '';
-      for (const model of HF_IMAGE_MODELS) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${hfKey}`,
-                'Content-Type': 'application/json',
-                Accept: 'image/png',
-              },
-              body: JSON.stringify({
-                inputs: enhanced,
-                parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
-                options: { wait_for_model: true },
-              }),
-            });
-            if (res.status === 503) {
-              // model loading, retry once
-              await new Promise((r) => setTimeout(r, 4000));
-              continue;
+      if (hfKey) {
+        outer: for (const host of HF_HOSTS) {
+          for (const model of HF_IMAGE_MODELS) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                const res = await fetch(`${host}/${model}`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${hfKey}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'image/png',
+                  },
+                  body: JSON.stringify({
+                    inputs: enhanced,
+                    parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
+                    options: { wait_for_model: true },
+                  }),
+                });
+                if (res.status === 503) {
+                  await new Promise((r) => setTimeout(r, 4000));
+                  continue;
+                }
+                if (!res.ok) {
+                  lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
+                  console.error(lastErr);
+                  break; // try next model
+                }
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.startsWith('image/')) {
+                  lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
+                  console.error(lastErr);
+                  break;
+                }
+                const buf = new Uint8Array(await res.arrayBuffer());
+                let bin = '';
+                for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+                const b64 = btoa(bin);
+                return { image: `data:${ct};base64,${b64}`, model: `hf:${model}` };
+              } catch (e) {
+                lastErr = e instanceof Error ? e.message : String(e);
+                console.error('HF fetch error', lastErr);
+              }
             }
-            if (!res.ok) {
-              lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
-              console.error(lastErr);
-              break; // try next model
-            }
-            const ct = res.headers.get('content-type') || '';
-            if (!ct.startsWith('image/')) {
-              lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
-              console.error(lastErr);
-              break;
-            }
-            const buf = new Uint8Array(await res.arrayBuffer());
-            let bin = '';
-            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-            const b64 = btoa(bin);
-            return { image: `data:${ct};base64,${b64}`, model };
-          } catch (e) {
-            lastErr = e instanceof Error ? e.message : String(e);
-            console.error('HF fetch error', lastErr);
           }
         }
+      } else {
+        lastErr = 'HUGGINGFACE_API_KEY not configured';
       }
+
+      // Fallback: Lovable AI image generation so visuals still work when HF is unreachable
+      try {
+        const fallbackRes = await fetch(AI_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-image',
+            messages: [
+              { role: 'user', content: enhanced },
+            ],
+            modalities: ['image', 'text'],
+          }),
+        });
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          const url: string | undefined =
+            data?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+            data?.choices?.[0]?.message?.images?.[0]?.url;
+          if (url && url.startsWith('data:image/')) {
+            return { image: url, model: 'lovable-ai:gemini-2.5-flash-image' };
+          }
+          lastErr = `Fallback returned no image. HF error was: ${lastErr}`;
+        } else {
+          lastErr = `Fallback AI ${fallbackRes.status}: ${(await fallbackRes.text()).slice(0, 200)}. HF: ${lastErr}`;
+        }
+      } catch (e) {
+        lastErr = `Fallback failed (${e instanceof Error ? e.message : String(e)}). HF: ${lastErr}`;
+      }
+
       throw new Error(lastErr || 'Image generation failed');
     }
 
