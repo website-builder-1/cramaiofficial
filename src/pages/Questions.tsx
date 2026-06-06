@@ -27,6 +27,10 @@ import { type Question, generateQuestions, gradeAnswers } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
+import { DriftToast } from '@/components/DriftToast';
+import { ReentryCard } from '@/components/ReentryCard';
+import { MarkScheme } from '@/components/MarkScheme';
+import { useEffect } from 'react';
 
 const questionTypes = [
   { id: 'multiple-choice', label: 'Multiple Choice' },
@@ -45,7 +49,12 @@ export default function Questions() {
     questionsState,
     setQuestionsState,
   } = useStudyStore();
+  const setLastContext = useStudyStore((s) => s.setLastContext);
   const material = getStudyMaterial();
+
+  useEffect(() => {
+    setLastContext('/questions', { label: `Practice: ${subject || 'study session'}` });
+  }, [setLastContext, subject]);
 
   const [questionCount, setQuestionCount] = useState(10);
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard' | 'mixed'>('mixed');
@@ -205,6 +214,8 @@ export default function Questions() {
   return (
     <div className="min-h-screen py-8">
       <div className="container px-4 max-w-4xl">
+        <DriftToast />
+        <ReentryCard />
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
@@ -444,6 +455,7 @@ export default function Questions() {
                         </div>
                       </div>
                     )}
+                    {isGraded && <MarkScheme ms={question.markScheme} />}
                   </div>
                 ))}
 

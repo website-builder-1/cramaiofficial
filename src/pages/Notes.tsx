@@ -9,10 +9,17 @@ import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
 import { ChunkList } from '@/components/ChunkList';
 import { Image as ImageIcon } from 'lucide-react';
+import { ReentryCard } from '@/components/ReentryCard';
+import { HallucinationFlags } from '@/components/HallucinationFlags';
+import { TtsPlayButton } from '@/components/TtsPlayButton';
 
 export default function Notes() {
   const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData, awardXp } = useStudyStore();
+  const setLastContext = useStudyStore((s) => s.setLastContext);
   const material = getStudyMaterial();
+  useEffect(() => {
+    setLastContext('/notes', { label: notesData?.title ? `Notes: ${notesData.title.replace(/<[^>]+>/g, '')}` : `Notes: ${subject || 'study material'}` });
+  }, [setLastContext, subject, notesData?.title]);
   const data = notesData;
   const [loading, setLoading] = useState(false);
   const [showVisuals, setShowVisuals] = useState(false);
@@ -82,6 +89,7 @@ export default function Notes() {
   return (
     <div className="min-h-screen py-8">
       <div className="container px-4 max-w-3xl">
+        <ReentryCard />
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
             <NotebookPen className="w-4 h-4 text-primary" />
@@ -134,6 +142,7 @@ export default function Notes() {
             <div className="glass-card rounded-xl p-6">
               <RichText html={data.title} as="h2" className="text-2xl font-bold mb-3 gradient-text" />
               {data.overview && <RichText html={data.overview} className="text-muted-foreground" />}
+              <TtsPlayButton text={`${data.title.replace(/<[^>]+>/g, '')}. ${(data.overview || '').replace(/<[^>]+>/g, '')}`} className="mt-2" />
             </div>
 
             {data.sections?.map((s, i) => (
@@ -177,6 +186,13 @@ export default function Notes() {
                   {data.keyTakeaways.map((b, i) => <li key={i}><RichText html={b} as="span" /></li>)}
                 </ul>
               </div>
+            )}
+            {material && data && (
+              <HallucinationFlags
+                source={material}
+                draft={[data.title, data.overview || '', ...(data.sections || []).flatMap((s) => [s.heading, s.body || '', ...(s.bullets || [])]), ...(data.keyTakeaways || [])].join('\n').replace(/<[^>]+>/g, '')}
+                cacheKey={`notes:${data.title}`}
+              />
             )}
           </div>
         )}

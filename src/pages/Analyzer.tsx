@@ -27,6 +27,8 @@ import { analyzeDocument, type AnalysisResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { RichText } from '@/components/RichText';
+import { JustStartCard } from '@/components/JustStartCard';
+import { ReentryCard } from '@/components/ReentryCard';
 
 const subjects = [
   // Sciences
@@ -97,6 +99,11 @@ export default function Analyzer() {
     resetGeneratedContent,
   } = useStudyStore();
   const awardXp = useStudyStore((s) => s.awardXp);
+  const setLastContext = useStudyStore((s) => s.setLastContext);
+
+  useEffect(() => {
+    setLastContext('/analyzer', { label: `Analyzer: ${subject || 'study material'}` });
+  }, [setLastContext, subject]);
   
   const [textInput, setTextInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -223,6 +230,7 @@ export default function Analyzer() {
   return (
     <div className="min-h-screen py-8">
       <div className="container px-4 max-w-4xl">
+        <ReentryCard />
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
@@ -368,6 +376,7 @@ export default function Analyzer() {
         {/* Results */}
         {localResult && !isAnalyzing && (
           <div className="space-y-6 animate-slide-up">
+            <JustStartCard />
             {/* Summary Card */}
             <div className="glass-card rounded-xl p-6">
               <div className="flex items-start gap-4 mb-4">

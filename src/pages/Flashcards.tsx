@@ -8,6 +8,9 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
+import { DriftToast } from '@/components/DriftToast';
+import { ReentryCard } from '@/components/ReentryCard';
+import { useEffect } from 'react';
 
 export default function Flashcards() {
   const {
@@ -19,6 +22,10 @@ export default function Flashcards() {
     setFlashcardsState,
     awardXp,
   } = useStudyStore();
+  const setLastContext = useStudyStore((s) => s.setLastContext);
+  useEffect(() => {
+    setLastContext('/flashcards', { label: `Flashcards: ${subject || 'study deck'}` });
+  }, [setLastContext, subject]);
   const material = getStudyMaterial();
   const [loading, setLoading] = useState(false);
 
@@ -79,6 +86,8 @@ export default function Flashcards() {
   return (
     <div className="min-h-screen py-8">
       <div className="container px-4 max-w-3xl">
+        <DriftToast />
+        <ReentryCard />
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
             <Layers className="w-4 h-4 text-primary" />
