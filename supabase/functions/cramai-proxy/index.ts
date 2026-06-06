@@ -494,6 +494,7 @@ async function handleEndpoint(
         'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
       system += HTML_FORMAT_RULES;
       system += adhdSystem(body);
+      system += syllabusSystem(body);
       let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {
