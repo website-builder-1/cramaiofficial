@@ -10,14 +10,17 @@ const MODEL_CHAT = 'google/gemini-2.5-flash';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash';
 
 const HF_IMAGE_MODELS = [
+  // Ordered best-first for free Hugging Face Inference Providers.
+  // Qwen-Image is currently the best free open model for legible in-image
+  // typography (labels, equations). FLUX.1-schnell is a fast, high-quality
+  // Apache-2.0 fallback. SDXL is a last-resort stable baseline.
+  'Qwen/Qwen-Image',
   'black-forest-labs/FLUX.1-schnell',
   'stabilityai/stable-diffusion-xl-base-1.0',
 ];
 
-// HuggingFace migrated away from api-inference.huggingface.co to the
-// Inference Providers router. We try the router first; if that fails for
-// network reasons we fall back to the legacy host, then finally to the
-// Lovable AI Gateway image model so visuals still work.
+// HuggingFace migrated to the Inference Providers router. We try the router
+// first and fall back to the legacy host if the router has DNS/network issues.
 const HF_HOSTS = [
   'https://router.huggingface.co/hf-inference/models',
   'https://api-inference.huggingface.co/models',
