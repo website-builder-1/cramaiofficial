@@ -1,10 +1,8 @@
-// Browser SpeechRecognition wrapper (free, on-device-ish).
-
 type Listener = (text: string, isFinal: boolean) => void;
 
 export function isSRSupported() {
   return typeof window !== 'undefined' &&
-    ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
+    !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
 }
 
 export function createRecognizer(onText: Listener, opts?: { lang?: string; continuous?: boolean }) {
