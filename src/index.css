@@ -323,3 +323,10 @@
 .rich-text dl { margin: 0.5rem 0; }
 .rich-text dt { font-weight: 600; }
 .rich-text dd { margin: 0 0 0.5rem 0; color: hsl(var(--muted-foreground)); }
+
+/* Focus Mode: dim non-essential UI to reduce distractions */
+body.focus-mode nav,
+body.focus-mode footer { opacity: 0.35; transition: opacity 0.3s; }
+body.focus-mode nav:hover,
+body.focus-mode footer:hover { opacity: 1; }
+body.focus-mode .glass-card { box-shadow: none; }
