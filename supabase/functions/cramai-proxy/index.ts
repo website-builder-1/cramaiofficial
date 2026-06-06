@@ -10,14 +10,17 @@ const MODEL_CHAT = 'google/gemini-2.5-flash';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash';
 
 const HF_IMAGE_MODELS = [
+  // Ordered best-first for free Hugging Face Inference Providers.
+  // Qwen-Image is currently the best free open model for legible in-image
+  // typography (labels, equations). FLUX.1-schnell is a fast, high-quality
+  // Apache-2.0 fallback. SDXL is a last-resort stable baseline.
+  'Qwen/Qwen-Image',
   'black-forest-labs/FLUX.1-schnell',
   'stabilityai/stable-diffusion-xl-base-1.0',
 ];
 
-// HuggingFace migrated away from api-inference.huggingface.co to the
-// Inference Providers router. We try the router first; if that fails for
-// network reasons we fall back to the legacy host, then finally to the
-// Lovable AI Gateway image model so visuals still work.
+// HuggingFace migrated to the Inference Providers router. We try the router
+// first and fall back to the legacy host if the router has DNS/network issues.
 const HF_HOSTS = [
   'https://router.huggingface.co/hf-inference/models',
   'https://api-inference.huggingface.co/models',
@@ -336,117 +339,88 @@ async function handleEndpoint(
       const prompt = asNonEmptyString(body.prompt);
       if (!prompt) throw new Error('Missing prompt');
       const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
-      const enhanced = `Educational diagram: ${prompt}. Clean minimalist flat vector illustration, labeled parts with clear legible English text labels, simple sans-serif typography, high contrast, white background, study textbook style. Avoid gibberish text, avoid misspelled words — if uncertain about text, omit text entirely and use icons/shapes only.`;
+      if (!hfKey) throw new Error('HUGGINGFACE_API_KEY not configured');
+
+      // Strong prompt scaffolding for study diagrams. Free open models still
+      // struggle with arbitrary in-image text, so we steer toward
+      // iconographic / minimal-label compositions and instruct the model to
+      // omit text it cannot render correctly.
+      const enhanced =
+        `Educational study diagram illustrating: ${prompt}. ` +
+        `Clean minimalist flat vector illustration, textbook style, ` +
+        `clearly arranged composition with generous whitespace, ` +
+        `high contrast, soft pastel palette on a pure white background, ` +
+        `crisp clean lines, balanced layout, single cohesive scene. ` +
+        `Use short labels of 1–3 real English words only where essential; ` +
+        `prefer icons, arrows and shapes over text. ` +
+        `Sharp focus, professional educational infographic aesthetic.`;
+
+      const negative =
+        'gibberish text, misspelled words, fake letters, scrambled typography, ' +
+        'random symbols, watermark, signature, blurry, low quality, distorted, ' +
+        'extra limbs, deformed, cluttered background, photo-realistic skin pores';
 
       let lastErr = '';
 
-      // PRIMARY: Lovable AI Gateway gpt-image-2 (best text legibility, no extra key needed)
-      try {
-        const res = await fetch('https://ai.gateway.lovable.dev/v1/images/generations', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'openai/gpt-image-2',
-            prompt: enhanced,
-            size: '1024x1024',
-            quality: 'low',
-            n: 1,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const b64: string | undefined = data?.data?.[0]?.b64_json;
-          if (b64) return { image: `data:image/png;base64,${b64}`, model: 'openai/gpt-image-2' };
-          lastErr = 'gpt-image-2 returned no image';
-        } else {
-          lastErr = `gpt-image-2 ${res.status}: ${(await res.text()).slice(0, 200)}`;
-        }
-      } catch (e) {
-        lastErr = `gpt-image-2 failed: ${e instanceof Error ? e.message : String(e)}`;
-      }
+      for (const host of HF_HOSTS) {
+        for (const model of HF_IMAGE_MODELS) {
+          // Schnell is distilled — needs few steps, low guidance. Other
+          // models benefit from more steps + real guidance.
+          const isSchnell = model.includes('schnell');
+          const parameters: Record<string, unknown> = isSchnell
+            ? { num_inference_steps: 4, guidance_scale: 0.0, width: 1024, height: 1024 }
+            : {
+                num_inference_steps: 30,
+                guidance_scale: 4.5,
+                width: 1024,
+                height: 1024,
+                negative_prompt: negative,
+              };
 
-      if (hfKey) {
-        outer: for (const host of HF_HOSTS) {
-          for (const model of HF_IMAGE_MODELS) {
-            for (let attempt = 0; attempt < 2; attempt++) {
-              try {
-                const res = await fetch(`${host}/${model}`, {
-                  method: 'POST',
-                  headers: {
-                    Authorization: `Bearer ${hfKey}`,
-                    'Content-Type': 'application/json',
-                    Accept: 'image/png',
-                  },
-                  body: JSON.stringify({
-                    inputs: enhanced,
-                    parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
-                    options: { wait_for_model: true },
-                  }),
-                });
-                if (res.status === 503) {
-                  await new Promise((r) => setTimeout(r, 4000));
-                  continue;
-                }
-                if (!res.ok) {
-                  lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
-                  console.error(lastErr);
-                  break; // try next model
-                }
-                const ct = res.headers.get('content-type') || '';
-                if (!ct.startsWith('image/')) {
-                  lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
-                  console.error(lastErr);
-                  break;
-                }
-                const buf = new Uint8Array(await res.arrayBuffer());
-                let bin = '';
-                for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-                const b64 = btoa(bin);
-                return { image: `data:${ct};base64,${b64}`, model: `hf:${model}` };
-              } catch (e) {
-                lastErr = e instanceof Error ? e.message : String(e);
-                console.error('HF fetch error', lastErr);
+          for (let attempt = 0; attempt < 2; attempt++) {
+            try {
+              const res = await fetch(`${host}/${model}`, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${hfKey}`,
+                  'Content-Type': 'application/json',
+                  Accept: 'image/png',
+                },
+                body: JSON.stringify({
+                  inputs: enhanced,
+                  parameters,
+                  options: { wait_for_model: true },
+                }),
+              });
+              if (res.status === 503) {
+                await new Promise((r) => setTimeout(r, 4000));
+                continue;
               }
+              if (!res.ok) {
+                lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
+                console.error(lastErr);
+                break; // try next model
+              }
+              const ct = res.headers.get('content-type') || '';
+              if (!ct.startsWith('image/')) {
+                lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
+                console.error(lastErr);
+                break;
+              }
+              const buf = new Uint8Array(await res.arrayBuffer());
+              let bin = '';
+              for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+              const b64 = btoa(bin);
+              return { image: `data:${ct};base64,${b64}`, model: `hf:${model}` };
+            } catch (e) {
+              lastErr = e instanceof Error ? e.message : String(e);
+              console.error('HF fetch error', lastErr);
             }
           }
         }
-      } else {
-        lastErr = 'HUGGINGFACE_API_KEY not configured';
       }
 
-      // Fallback: Lovable AI image generation so visuals still work when HF is unreachable
-      try {
-        const fallbackRes = await fetch(AI_URL, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash-image',
-            messages: [
-              { role: 'user', content: enhanced },
-            ],
-            modalities: ['image', 'text'],
-          }),
-        });
-        if (fallbackRes.ok) {
-          const data = await fallbackRes.json();
-          const url: string | undefined =
-            data?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
-            data?.choices?.[0]?.message?.images?.[0]?.url;
-          if (url && url.startsWith('data:image/')) {
-            return { image: url, model: 'lovable-ai:gemini-2.5-flash-image' };
-          }
-          lastErr = `Fallback returned no image. HF error was: ${lastErr}`;
-        } else {
-          lastErr = `Fallback AI ${fallbackRes.status}: ${(await fallbackRes.text()).slice(0, 200)}. HF: ${lastErr}`;
-        }
-      } catch (e) {
-        lastErr = `Fallback failed (${e instanceof Error ? e.message : String(e)}). HF: ${lastErr}`;
-      }
-
-      throw new Error(lastErr || 'Image generation failed');
+      throw new Error(lastErr || 'Hugging Face image generation failed');
     }
 
     case '/api/chat':
