@@ -212,3 +212,29 @@ export async function generateNotes(
 ): Promise<ApiResponse<NotesResult>> {
   return apiRequest<NotesResult>('/api/notes/generate', { content, ...(context || {}) });
 }
+
+// Image generation via HuggingFace (proxied)
+export async function generateConceptImage(prompt: string): Promise<ApiResponse<{ image: string; model?: string }>> {
+  return apiRequest<{ image: string; model?: string }>('/api/image/generate', { prompt });
+}
+
+// ADHD helpers
+export interface ChunkStep {
+  id: string;
+  title: string;
+  detail: string;
+  minutes: number;
+  reward: string;
+}
+
+export async function chunkContent(content: string, topic?: string): Promise<ApiResponse<{ steps: ChunkStep[] }>> {
+  return apiRequest<{ steps: ChunkStep[] }>('/api/chunk', { content, topic });
+}
+
+export async function justStartTask(content: string): Promise<ApiResponse<{ task: string; why: string; minutes: number }>> {
+  return apiRequest<{ task: string; why: string; minutes: number }>('/api/just-start', { content });
+}
+
+export async function quickRecap(content: string, focus?: string): Promise<ApiResponse<{ bullets: string[] }>> {
+  return apiRequest<{ bullets: string[] }>('/api/recap', { content, focus });
+}
