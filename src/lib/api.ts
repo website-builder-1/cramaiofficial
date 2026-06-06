@@ -106,7 +106,7 @@ export async function analyzeDocument(
   examBoard?: string,
   images?: string[],
 ): Promise<ApiResponse<AnalysisResult>> {
-  return apiRequest<AnalysisResult>('/api/analyze', { content, subject, examLevel, examBoard, images });
+  return apiRequest<AnalysisResult>('/api/analyze', withGrounding({ content, subject, examLevel, examBoard, images }));
 }
 
 export async function generateQuestions(params: {
@@ -118,7 +118,7 @@ export async function generateQuestions(params: {
   examLevel?: string;
   examBoard?: string;
 }): Promise<ApiResponse<Question[]>> {
-  return apiRequest<Question[]>('/api/questions/generate', params);
+  return apiRequest<Question[]>('/api/questions/generate', withGrounding({ ...params }));
 }
 
 export async function gradeAnswers(
@@ -243,14 +243,14 @@ export async function generateFlashcards(
   count = 15,
   context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<{ cards: Flashcard[] }>> {
-  return apiRequest<{ cards: Flashcard[] }>('/api/flashcards/generate', { content, count, ...(context || {}) });
+  return apiRequest<{ cards: Flashcard[] }>('/api/flashcards/generate', withGrounding({ content, count, ...(context || {}) }));
 }
 
 export async function generateSummary(
   content: string,
   context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<SummaryResult>> {
-  return apiRequest<SummaryResult>('/api/summary/generate', { content, ...(context || {}) });
+  return apiRequest<SummaryResult>('/api/summary/generate', withGrounding({ content, ...(context || {}) }));
 }
 
 export interface NotesSection {
@@ -271,7 +271,7 @@ export async function generateNotes(
   content: string,
   context?: { subject?: string; examLevel?: string; examBoard?: string },
 ): Promise<ApiResponse<NotesResult>> {
-  return apiRequest<NotesResult>('/api/notes/generate', { content, ...(context || {}) });
+  return apiRequest<NotesResult>('/api/notes/generate', withGrounding({ content, ...(context || {}) }));
 }
 
 // Image generation via HuggingFace (proxied)
@@ -298,4 +298,54 @@ export async function justStartTask(content: string): Promise<ApiResponse<{ task
 
 export async function quickRecap(content: string, focus?: string): Promise<ApiResponse<{ bullets: string[] }>> {
   return apiRequest<{ bullets: string[] }>('/api/recap', { content, focus });
+}
+
+// ---- New endpoints ----
+
+export async function explainBack(params: {
+  concept: string;
+  userExplanation: string;
+  context: string;
+}): Promise<ApiResponse<{ score: number; missing: string[]; goodPoints: string[]; oneLineFix: string }>> {
+  return apiRequest('/api/explain-back', withGrounding({ ...params }));
+}
+
+export async function fetchSyllabusContext(params: {
+  subject: string;
+  examLevel?: string;
+  examBoard?: string;
+  syllabusCode?: string;
+}): Promise<ApiResponse<SyllabusContext>> {
+  return apiRequest('/api/syllabus/fetch', params);
+}
+
+export async function fetchPastPaperContext(params: {
+  subject: string;
+  examLevel?: string;
+  examBoard?: string;
+}): Promise<ApiResponse<PastPaperContext>> {
+  return apiRequest('/api/past-papers/context', params);
+}
+
+export interface DiagramAccuracy {
+  accuracyScore: number;
+  issues: string[];
+  suggestedPromptFix?: string;
+}
+
+export async function verifyDiagram(params: { prompt: string }): Promise<ApiResponse<DiagramAccuracy>> {
+  return apiRequest('/api/verify-diagram', params);
+}
+
+export interface HallucinationFlag {
+  text: string;
+  reason: string;
+  suggestedFix?: string;
+}
+
+export async function hallucinationCheck(params: {
+  source: string;
+  draft: string;
+}): Promise<ApiResponse<{ flaggedClaims: HallucinationFlag[] }>> {
+  return apiRequest('/api/hallucination-check', params);
 }
