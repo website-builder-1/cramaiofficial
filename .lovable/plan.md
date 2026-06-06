@@ -1,92 +1,154 @@
-## 1. Visuals via Hugging Face
+# CramAI: ADHD + Accuracy Upgrade Plan
 
-Model: `black-forest-labs/FLUX.1-schnell` via HF Inference API.
+A large but cohesive set of features. Grouped by surface so you can see what changes where. All AI goes through the existing `cramai-proxy` edge function (Lovable AI for text, HuggingFace for images, browser SpeechSynthesis/Recognition for voice/TTS — all free).
 
-- Best free text-to-image model right now: 4-step generation (fast), Apache 2.0 license, free tier on HF Inference API.
-- Fallback if rate-limited: `stabilityai/stable-diffusion-xl-base-1.0`.
-- Requires a free HF token - I will use the current one in the database, secrets under the name of HUGGINGFACE_API_KEY.
+> Quota fix (bundled): the store currently overflows `localStorage` (`cramai-study-store` quota error). I'll move heavy fields (notes, flashcards, questions, analysis, chat history, images cache) out of the persisted slice and keep only lightweight prefs/ADHD profile/XP/streak there. This unblocks everything below.
 
-Where visuals appear:
+---
 
-- Notes: There will be a button on the left of Copy in the notes section called "Generate Visualizations" this then generates one concept diagram per section (generated lazily as sections render; cached in store).
-- Flashcards: optional image on card front, generated on demand via "Add visual" button (saves cost/rate limits).
-- AI Tutor Chat:  a "Generate diagram" button on assistant replies.
+## 1. ADHD Features
 
-Prompt strategy: a small server-side prompt template turns the topic/concept into a clean educational-diagram prompt ("minimalist educational diagram of X, labeled, flat vector, white background"). Images returned as base64 → rendered inline; stored alongside their parent content in Zustand so they persist across navigation (matches existing persistence rules).
+### Re-entry assistant
 
-Backend: new endpoint `/api/image/generate` in `cramai-proxy` that calls HF Inference API with HUGGINGFACE_API_KEY, handles 503 (model loading) with one retry, returns `{ image: "data:image/png;base64,..." }`.
+- New `ReentryCard` shown on Analyzer / Notes / Questions / Chat when the user returns after >2 min away (tracked via `visibilitychange` + last-active timestamp per page).
+- Card shows: "Where you left off" — last section/question/chat turn + a 2-line AI recap ("`/api/recap`" already exists) + a "Resume" button that scrolls to last position.
+- Stores `lastContext` per route in the (non-persisted) store, plus a small persisted `lastVisitedRoute` for cross-session resume on Home.
 
-## 2. Light Gamification
+### Drift detection
 
-Stored locally in Zustand (persisted), no backend changes:
+- Hook `useDriftDetection()` runs on Questions, Flashcards, Chat, StudyPlan (NOT Notes, NOT Analyzer).
+- Detects: no scroll/keypress/click for 90s, or tab hidden >60s then returned.
+- On drift → small toast-style micro-quiz: 1 AI-generated MCQ from current material (`/api/questions/generate` with count=1) to re-engage. Dismissable.
+- Respects ADHD profile (off if user opts out in onboarding).
 
-- XP + Level: actions award XP (analyze material 50, generate notes 20, complete flashcard review 5, answer question correctly 10, finish focus session 30).
-- Daily streak: increments when any study action happens today; resets after a missed day.
-- Daily goal ring: target = 100 XP/day, animated ring in navbar.
-- Toast on level-up / streak milestone.
+### Hyperfocus brake
 
-UI: compact stats cluster in `Navbar` (level badge, streak flame, XP ring). New `src/lib/gamification.ts` with `awardXp(amount, reason)` helper called from existing pages.
+- Global timer (in store) increments while any study page is active. At 45 min of continuous active time → trigger brake.
+- Full-screen overlay: fades in to pure white over 1.5s, holds white, 60s countdown in soft gray text, "Skip" button, then fades out over 1.5s back to the previous view (route unchanged, scroll preserved).
+- New component `HyperfocusBrake.tsx` mounted in `App.tsx`. Configurable interval in ADHD onboarding (30/45/60 min/off).
 
-## 3. ADHD-focused features
+### Externalised working memory (opt-in)
 
-Researched-backed pain points → features:
+- Floating side panel `ScratchpadPanel.tsx` toggled by a small "Brain" button in the navbar; off by default.
+- Persists per-route notes in localStorage (small) — quick jot, checklist, "park-it" thoughts.
+- Voice-to-text input button (uses Web Speech Recognition, no API cost).
 
-### A. Focus Mode + Pomodoro timer
+### Voice-first mode (toggle)
 
-- Floating focus widget (bottom-right), accessible from any page.
-- 25/5 default, configurable (15/3, 50/10).
-- "Focus Mode" toggle: hides navbar visuals, dims non-essential UI, soft brown-noise toggle (optional, off by default — uses Web Audio API, no asset).
-- Hyperfocus nudge: after 20 min continuous activity, gentle banner "You've been at it 20 min — stand up, water, stretch."
-- Awards XP on completed sessions.
+- Global toggle in Navbar + ADHD onboarding.
+- When on:
+  - All long text blocks (Notes sections, Chat AI replies, Summary, flashcard fronts/backs) get a small "Play" button using `speechSynthesis`.
+  - Composer/inputs on Chat + Analyzer get a mic button (already partially via `VoiceInput.tsx`) auto-enabled.
+  - Keyboard shortcut `V` to read currently focused/visible block.
 
-### B. Micro-chunking
+### "Explain it back" mode
 
-- New backend endpoint `/api/chunk` that takes the current analyzer content (or a notes section) and returns an array of 2–5 min bite-size steps with estimated minutes and a one-line dopamine reward ("✓ You'll be able to explain X").
-- New "Break it down" button on Notes sections and on Study Plan items → renders a vertical checklist; checking a step awards XP.
+- New button on each Notes section and on Chat: "Explain it back".
+- Opens a small modal: user records voice (Web Speech Recognition) or types their explanation. AI grades it via a new proxy endpoint `/api/explain-back` returning `{score, missing[], goodPoints[], oneLineFix}`.
 
-### C. Task initiation helper ("Just Start")
+### AI cheerleader tone setting
 
-- Big button on Home + Study Plan: "Just Start (2 min)".
-- Calls `/api/just-start` which picks the single easiest next 2-min task from current material (e.g., "Read this one definition: …" or "Try this 1 flashcard"). Bypasses choice paralysis.
-- Starts a 2-min mini-timer; on complete, asks "Keep going?" with a one-tap continue.
+- Extend ADHD onboarding + a Settings dropdown: `gentle | direct | playful | coach | dry`.
+- Pass into the existing `adhdProfile.coachTone` (already wired through `withHint`); update system prompts in proxy for chat, chunk, just-start, explain-back endpoints to honor tone.
 
-### D. Working-memory aids
+### Shame-free streaks
 
-- Sticky "Context bar" at top of Notes/Questions/Flashcards/Chat showing current material title + "Where was I?" button that scrolls/jumps to last interacted item (tracked per page in store).
-- "Quick Recap" button on every page → calls `/api/recap` returning a 3-bullet refresher of what the user just covered (uses last viewed section + recent actions).
-- Voice capture in AI Tutor Chat: mic button uses Web Speech API (browser-native, free) to dictate questions — helps when typing breaks the thought.
+- Replace daily-streak counter logic with "weekly momentum": shows sessions/week, never resets to 0 visibly; missed days display as soft dots not red X's. Copy reframed ("welcome back" instead of "you broke your streak").
+- Update `StatsCluster.tsx` + store streak logic.
 
-## Technical Section
+### Time-blindness helper
 
-### New/modified files
+- Persistent header pill (only on study pages) showing: elapsed in current session + estimated time left on current task/section (from chunk minutes).
 
-- `supabase/functions/cramai-proxy/index.ts` — add `/api/image/generate` (HF), `/api/chunk`, `/api/just-start`, `/api/recap`.
-- `src/lib/hfImage.ts` — small client helper that calls the proxy and returns a data URL.
-- `src/lib/gamification.ts` — XP/level/streak logic + zustand slice in `src/lib/store.ts`.
-- `src/lib/store.ts` — add `gamification`, `focusSession`, `lastViewed` per-page, cache for generated images keyed by content hash.
-- `src/components/FocusWidget.tsx` — floating pomodoro + focus mode.
-- `src/components/StatsCluster.tsx` — navbar XP/streak display.
-- `src/components/ContextBar.tsx` — sticky working-memory bar.
-- `src/components/JustStartButton.tsx` — task initiation CTA.
-- `src/components/ChunkList.tsx` — micro-chunked checklist UI.
-- `src/components/VoiceInput.tsx` — Web Speech API wrapper for Chat.
-- `src/components/ConceptImage.tsx` — handles HF image load/skeleton/error/retry.
-- Pages updated: `Notes.tsx`, `Summary.tsx`, `Flashcards.tsx`, `Chat.tsx`, `Home.tsx`, `StudyPlan.tsx`, `Navbar.tsx`, `App.tsx` (mount FocusWidget globally).
+---
 
-### Persistence rules (unchanged)
+## 2. Output / Content Features
 
-- Generated images cached in store under content hash so navigation doesn't re-trigger HF calls.
-- Cleared only when new material is analyzed (reuse existing `resetGeneratedContent`) or the user hits a "Regenerate" button.
+### Audio export of notes (TTS commute mode)
 
-### Out of scope (call out)
+- On Notes page header: "Download audio" button.
+- Builds a single script from all sections, uses `speechSynthesis` to render to an audio file via `MediaRecorder` capturing an `AudioContext` MediaStreamDestination → `.webm` download. (Fully free, in-browser.)
+- Also a "Play all" inline player that auto-advances section by section.
 
-- No backend leaderboard / per-user XP sync (you picked Light gamification — kept local).
-- No avatar/pet system.
-- No mobile app changes beyond responsive web.
+### "Just Start" → moved to Analyzer
 
-### Risks
+- Remove `JustStartButton` from Home.
+- After analysis completes on Analyzer, show a `JustStartCard` directly under the analysis result: AI picks the single smallest first task (existing `/api/just-start` endpoint), with a "Start 2-min timer" button.
 
-- HF cold start / rate limits: mitigated by lazy generation, caching, single retry, skeleton UI, "Generate visual" button rather than auto-generating dozens at once.
-- Web Speech API not supported in all browsers (Safari iOS quirky): feature-detect and hide the mic button when unsupported.  
-  
-**USE AN AI FROM HUGGINGFACE USING THE ACCESS TOKEN ALREADY STORED IN SECRETS TO GENERATE IMAGES WITH UNLIMITED USE AND WOULD WORK WELL FOR GENERATING VISUALS FOR NOTES AND STUDYING!**
+---
+
+## 3. Accuracy Features
+
+### Exam-board grounding
+
+- Analyzer already has subject/examLevel/examBoard inputs
+- New proxy endpoint `/api/syllabus/fetch`: server-side fetches the spec (when URL given) or queries the model with strong "use known {board} {level} {subject} specification" prompt, returns a normalized `syllabusContext` (topics list, weightings, command words, assessment objectives).
+- Store `syllabusContext` in the (in-memory) study store and append it to the system prompt of every downstream endpoint (analyze, notes, questions, flashcards, summary, chunk, chat). All pages then produce board-aligned content.
+- UI: small "Grounded to AQA A-level Biology 7402" chip visible on Notes/Questions/Flashcards/Chat headers.
+
+### Past-paper alignment
+
+- New proxy endpoint `/api/past-papers/context` — given subject/level/board, asks the model to summarize common past-paper question patterns, command words, and mark allocation style for that spec.
+- Cached per (subject, level, board) in the in-memory store.
+- Questions generation prompt extended to: mimic past-paper style, weight by syllabus topic frequency, use board-specific command words.
+
+### Marking scheme for practice questions
+
+- Extend `/api/questions/generate` response to include `markScheme: {points: [{point, marks}], totalMarks, examinerNotes, commonMistakes}` per question.
+- On Questions results page: show mark-scheme accordion under each question; on grading, show point-by-point match.
+
+---
+
+## Technical details
+
+**Files to add**
+
+- `src/components/ReentryCard.tsx`
+- `src/components/HyperfocusBrake.tsx`
+- `src/components/ScratchpadPanel.tsx`
+- `src/components/ExplainBackModal.tsx`
+- `src/components/TimePill.tsx`
+- `src/components/JustStartCard.tsx` (Analyzer variant)
+- `src/components/MarkScheme.tsx`
+- `src/components/SyllabusChip.tsx`
+- `src/components/HallucinationFlag.tsx`
+- `src/hooks/useDriftDetection.ts`
+- `src/hooks/useActiveTimer.ts`
+- `src/hooks/useReentry.ts`
+- `src/lib/tts.ts` (speechSynthesis + MediaRecorder export)
+- `src/lib/voice.ts` (SpeechRecognition wrapper)
+
+**Files to edit**
+
+- `src/lib/store.ts` — split persisted vs in-memory slices (fixes quota); add syllabusContext, scratchpad, voice toggle, cheerleader tone, drift settings, lastContext per route, active timer state.
+- `src/lib/api.ts` — new endpoints: `explainBack`, `fetchSyllabus`, `fetchPastPaperContext`, `verifyDiagram`, `hallucinationCheck`; extend `Question` with `markScheme`.
+- `src/components/AdhdOnboarding.tsx` — add cheerleader tone, voice-first toggle, hyperfocus interval, drift on/off, scratchpad default.
+- `src/components/Navbar.tsx` — voice-first toggle, scratchpad toggle, time pill.
+- `src/components/ConceptImage.tsx` — diagram accuracy filter + auto-retry.
+- `src/pages/Home.tsx` — remove JustStart, add re-entry card.
+- `src/pages/Analyzer.tsx` — add syllabus code input, JustStartCard, re-entry, syllabus chip.
+- `src/pages/Notes.tsx` — TTS play buttons, audio export, explain-back per section, hallucination flags, syllabus chip. (No drift detection here.)
+- `src/pages/Questions.tsx` — mark scheme display, drift detection, hallucination flags, past-paper styling, syllabus chip.
+- `src/pages/Flashcards.tsx` — TTS, drift detection, syllabus chip.
+- `src/pages/Chat.tsx` — explain-back, voice-first auto mic, re-entry, drift detection.
+- `src/pages/StudyPlan.tsx` — reverse planner, T-minus countdowns, drift detection.
+- `src/App.tsx` — mount HyperfocusBrake, ScratchpadPanel.
+- `supabase/functions/cramai-proxy/index.ts` — new endpoints (`/api/explain-back`, `/api/syllabus/fetch`, `/api/past-papers/context`, `/api/verify-diagram`, `/api/hallucination-check`); inject syllabus + past-paper context + cheerleader tone into existing endpoint prompts; extend questions generator to return `markScheme`.
+
+**Free-tier discipline**
+
+- Images: HuggingFace only (unchanged).
+- Voice in/out: native browser APIs — zero cost.
+
+---
+
+## Build order
+
+1. Store refactor (fix quota) + ADHD onboarding extensions.
+2. Exam-board grounding + past-paper context (foundation for accuracy everywhere).
+3. Hallucination pass + mark scheme + diagram filter.
+4. Re-entry + drift + hyperfocus + time pill.
+5. Voice-first + TTS export + explain-back + scratchpad.
+6. Move Just Start to Analyzer; shame-free streaks copy pass.
+
+Approve and I'll build it in that order.
