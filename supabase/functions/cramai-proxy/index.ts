@@ -43,6 +43,45 @@ function asNonEmptyString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
 }
 
+function adhdSystem(body: Record<string, unknown>): string {
+  const p = body.adhdProfile as
+    | {
+        hasAdhd?: boolean | null;
+        attentionSpan?: 'short' | 'medium' | 'long';
+        chunkStyle?: 'tiny' | 'standard' | 'deep';
+        coachTone?: 'gentle' | 'direct' | 'playful';
+        struggles?: string[];
+        rewardsOn?: boolean;
+      }
+    | undefined;
+  if (!p) return '';
+  const lines: string[] = ['\n\nLEARNER PROFILE (personalize to this user):'];
+  if (p.hasAdhd) lines.push('- User has self-identified ADHD. Adapt accordingly.');
+  if (p.attentionSpan) lines.push(`- Attention span: ${p.attentionSpan}.`);
+  if (p.chunkStyle) {
+    const map = {
+      tiny: 'Use very small 1-2 minute micro-steps; never overwhelm.',
+      standard: 'Use 2-5 minute chunks.',
+      deep: 'Allow longer 5-10 minute chunks when concept depth is needed.',
+    } as const;
+    lines.push(`- Chunking style: ${p.chunkStyle} (${map[p.chunkStyle]})`);
+  }
+  if (p.coachTone) {
+    const tone = {
+      gentle: 'warm, kind, low-pressure, validating',
+      direct: 'crisp, no fluff, action-first, body-double style',
+      playful: 'fun, light, dopamine-hitting, emoji okay but minimal',
+    } as const;
+    lines.push(`- Tone: ${p.coachTone} (${tone[p.coachTone]}).`);
+  }
+  if (p.struggles?.length) {
+    lines.push(`- Known struggles: ${p.struggles.join(', ')}. Proactively scaffold around these.`);
+  }
+  if (p.rewardsOn) lines.push('- End each response with a tiny, concrete dopamine reward / win.');
+  lines.push('- Avoid long walls of text. Prefer short paragraphs, bullets, and clear next actions.');
+  return lines.join('\n');
+}
+
 async function callAI(opts: {
   apiKey: string;
   model: string;
