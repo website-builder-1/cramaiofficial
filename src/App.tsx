@@ -9,7 +9,6 @@ import Analyzer from "./pages/Analyzer";
 import Questions from "./pages/Questions";
 import StudyPlan from "./pages/StudyPlan";
 import Chat from "./pages/Chat";
-import Diagnostic from "./pages/Diagnostic";
 import Flashcards from "./pages/Flashcards";
 import Summary from "./pages/Summary";
 import Notes from "./pages/Notes";
@@ -33,7 +32,6 @@ const App = () => (
               <Route path="/questions" element={<Questions />} />
               <Route path="/study-plan" element={<StudyPlan />} />
               <Route path="/chat" element={<Chat />} />
-              <Route path="/diagnostic" element={<Diagnostic />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/summary" element={<Summary />} />
               <Route path="/notes" element={<Notes />} />

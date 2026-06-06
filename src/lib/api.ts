@@ -79,14 +79,6 @@ export interface StudyPlan {
   tips: string[];
 }
 
-export interface LastMinuteReview {
-  keyPoints: string[];
-  mustKnow: string[];
-  quickFormulas: string[];
-  commonMistakes: string[];
-  confidenceBooster: string;
-}
-
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

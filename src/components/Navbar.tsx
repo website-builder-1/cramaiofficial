@@ -5,7 +5,6 @@ import {
   MessageCircle, 
   FileText, 
   Calendar, 
-  ClipboardCheck,
   Layers,
   ScrollText,
   NotebookPen,
@@ -27,7 +26,6 @@ const navItems = [
   
   { path: '/study-plan', label: 'Study Plan', icon: Calendar },
   { path: '/chat', label: 'AI Tutor', icon: MessageCircle },
-  { path: '/diagnostic', label: 'Diagnostic', icon: ClipboardCheck },
 ];
 
 export function Navbar() {
