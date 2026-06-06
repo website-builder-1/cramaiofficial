@@ -49,6 +49,14 @@ export interface Question {
   explanation?: string;
   difficulty: 'easy' | 'medium' | 'hard';
   topic: string;
+  markScheme?: MarkScheme;
+}
+
+export interface MarkScheme {
+  points: { point: string; marks: number }[];
+  totalMarks: number;
+  examinerNotes?: string;
+  commonMistakes?: string[];
 }
 
 export interface GradeResult {
@@ -133,7 +141,7 @@ export interface AdhdHint {
   hasAdhd?: boolean | null;
   attentionSpan?: 'short' | 'medium' | 'long';
   chunkStyle?: 'tiny' | 'standard' | 'deep';
-  coachTone?: 'gentle' | 'direct' | 'playful';
+  coachTone?: 'gentle' | 'direct' | 'playful' | 'coach' | 'dry';
   struggles?: string[];
   rewardsOn?: boolean;
 }
@@ -142,9 +150,43 @@ let currentAdhdHint: AdhdHint | null = null;
 export function setAdhdHint(hint: AdhdHint | null) {
   currentAdhdHint = hint;
 }
+
+// Syllabus / past-paper context shared across calls
+export interface SyllabusContext {
+  label: string;
+  topics: { name: string; weight?: string; notes?: string }[];
+  commandWords?: string[];
+  assessmentObjectives?: string[];
+  summary?: string;
+}
+
+export interface PastPaperContext {
+  label: string;
+  patterns: string[];
+  commonCommandWords?: string[];
+  markAllocationStyle?: string;
+  pitfalls?: string[];
+}
+
+let currentSyllabus: SyllabusContext | null = null;
+let currentPastPapers: PastPaperContext | null = null;
+export function setSyllabusContextHint(ctx: SyllabusContext | null) {
+  currentSyllabus = ctx;
+}
+export function setPastPaperContextHint(ctx: PastPaperContext | null) {
+  currentPastPapers = ctx;
+}
+
 function withHint<T extends Record<string, unknown>>(body: T): T {
   if (currentAdhdHint) (body as Record<string, unknown>).adhdProfile = currentAdhdHint;
+  if (currentSyllabus) (body as Record<string, unknown>).syllabusContext = currentSyllabus;
+  if (currentPastPapers) (body as Record<string, unknown>).pastPaperContext = currentPastPapers;
   return body;
+}
+
+/** Same as withHint but always usable for non-ADHD endpoints. */
+function withGrounding<T extends Record<string, unknown>>(body: T): T {
+  return withHint(body);
 }
 
 export async function sendChatMessage(
