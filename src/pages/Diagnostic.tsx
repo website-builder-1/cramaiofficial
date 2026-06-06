@@ -18,6 +18,7 @@ import { type Question, runDiagnosticTest } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { RichText } from '@/components/RichText';
 
 export default function Diagnostic() {
   const navigate = useNavigate();
@@ -332,7 +333,7 @@ export default function Diagnostic() {
                 {currentQuestion.difficulty}
               </div>
               
-              <h3 className="text-lg font-semibold mb-6">{currentQuestion.question}</h3>
+              <RichText html={currentQuestion.question} className="text-lg font-semibold mb-6" />
 
               <RadioGroup
                 value={userAnswers[currentQuestion.id] || ''}
@@ -352,7 +353,7 @@ export default function Diagnostic() {
                   >
                     <RadioGroupItem value={option} id={`option-${i}`} />
                     <Label htmlFor={`option-${i}`} className="flex-1 cursor-pointer font-normal">
-                      {option}
+                      <RichText html={option} as="span" />
                     </Label>
                   </div>
                 ))}
