@@ -74,8 +74,11 @@ function adhdSystem(body: Record<string, unknown>): string {
       gentle: 'warm, kind, low-pressure, validating',
       direct: 'crisp, no fluff, action-first, body-double style',
       playful: 'fun, light, dopamine-hitting, emoji okay but minimal',
+      coach: 'firm, motivating, sports-coach style, brief and energizing',
+      dry: 'extremely concise, deadpan, no emoji, no encouragement, just facts',
     } as const;
-    lines.push(`- Tone: ${p.coachTone} (${tone[p.coachTone]}).`);
+    const k = p.coachTone as keyof typeof tone;
+    lines.push(`- Tone: ${k} (${tone[k] ?? ''}).`);
   }
   if (p.struggles?.length) {
     lines.push(`- Known struggles: ${p.struggles.join(', ')}. Proactively scaffold around these.`);
@@ -83,6 +86,48 @@ function adhdSystem(body: Record<string, unknown>): string {
   if (p.rewardsOn) lines.push('- End each response with a tiny, concrete dopamine reward / win.');
   lines.push('- Avoid long walls of text. Prefer short paragraphs, bullets, and clear next actions.');
   return lines.join('\n');
+}
+
+function syllabusSystem(body: Record<string, unknown>): string {
+  const s = body.syllabusContext as
+    | {
+        label?: string;
+        topics?: { name: string; weight?: string; notes?: string }[];
+        commandWords?: string[];
+        assessmentObjectives?: string[];
+        summary?: string;
+      }
+    | undefined;
+  const pp = body.pastPaperContext as
+    | {
+        label?: string;
+        patterns?: string[];
+        commonCommandWords?: string[];
+        markAllocationStyle?: string;
+        pitfalls?: string[];
+      }
+    | undefined;
+  const out: string[] = [];
+  if (s) {
+    out.push('\n\nEXAM-BOARD GROUNDING — produce only content that aligns with this specification:');
+    if (s.label) out.push(`- Specification: ${s.label}`);
+    if (s.summary) out.push(`- Overview: ${s.summary}`);
+    if (s.topics?.length) {
+      out.push('- Required topics: ' + s.topics.map((t) => `${t.name}${t.weight ? ` (${t.weight})` : ''}`).join('; '));
+    }
+    if (s.commandWords?.length) out.push('- Command words to use: ' + s.commandWords.join(', '));
+    if (s.assessmentObjectives?.length) out.push('- Assessment objectives: ' + s.assessmentObjectives.join(' | '));
+    out.push('- DO NOT include content that is outside this specification. If the source material drifts off-spec, narrow to what the spec covers.');
+  }
+  if (pp) {
+    out.push('\nPAST-PAPER ALIGNMENT — mimic the style and weighting of real exam papers:');
+    if (pp.label) out.push(`- Source: ${pp.label}`);
+    if (pp.patterns?.length) out.push('- Common question patterns: ' + pp.patterns.join(' | '));
+    if (pp.commonCommandWords?.length) out.push('- Use these command words verbatim: ' + pp.commonCommandWords.join(', '));
+    if (pp.markAllocationStyle) out.push('- Mark allocation: ' + pp.markAllocationStyle);
+    if (pp.pitfalls?.length) out.push('- Common student pitfalls to surface in mark schemes: ' + pp.pitfalls.join('; '));
+  }
+  return out.join('\n');
 }
 
 async function callAI(opts: {
@@ -208,7 +253,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.' + HTML_FORMAT_RULES,
+          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: userPayload,
       });
     }
@@ -225,8 +270,8 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You generate high-quality exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material.\n\nRULES PER TYPE:\n- multiple-choice: provide 4 plausible options in "options"; "correctAnswer" must equal one option verbatim.\n- true-false: "options" = ["True","False"]; "correctAnswer" = "True" or "False".\n- short-answer: NO options. "correctAnswer" is a 1-3 sentence model answer covering the required points.\n- essay: NO options. "question" is a real essay prompt (e.g. "Discuss...", "Evaluate...", "To what extent..."). "correctAnswer" is a detailed mark-scheme / model answer (3-6 sentences) listing the key arguments, evidence, and structure expected. Match the exam-board command words and depth.\n\nReturn ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES,
-        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (ONLY for multiple-choice/true-false — omit for short-answer/essay),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
+          'You generate high-quality exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material.\n\nRULES PER TYPE:\n- multiple-choice: provide 4 plausible options in "options"; "correctAnswer" must equal one option verbatim.\n- true-false: "options" = ["True","False"]; "correctAnswer" = "True" or "False".\n- short-answer: NO options. "correctAnswer" is a 1-3 sentence model answer covering the required points.\n- essay: NO options. "question" is a real essay prompt. "correctAnswer" is a detailed model answer.\n\nEVERY question MUST also include a "markScheme" object: { "points": [{"point": string, "marks": number}], "totalMarks": number, "examinerNotes"?: string, "commonMistakes"?: string[] }. Allocate marks the way a real examiner for this board/level would. For MCQ/TF, totalMarks is 1 and points has a single entry.\n\nReturn ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES + syllabusSystem(body),
+        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (ONLY for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string,\n  "markScheme": {"points":[{"point":string,"marks":number}],"totalMarks":number,"examinerNotes"?:string,"commonMistakes"?:string[]}\n}\n\nReturn: {"questions": [...]}`,
         maxTokens: 3500,
       });
       return Array.isArray(parsed) ? parsed : (parsed.questions || []);
@@ -265,7 +310,7 @@ async function handleEndpoint(
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts in the material above. Match the depth to the exam level/board if provided.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
         maxTokens: 3000,
       });
@@ -278,7 +323,7 @@ async function handleEndpoint(
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
         maxTokens: 2500,
       });
@@ -291,7 +336,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "title": string,\n  "overview": string,\n  "sections": [{"heading": string, "body": string, "bullets": string[], "examples": string[]}],\n  "keyTakeaways": string[]\n}\n\nProduce 4-8 sections. Each section should have a body paragraph PLUS bullets. Include examples where helpful. Empty arrays are allowed but prefer rich content.`,
         maxTokens: 4000,
       });
@@ -449,6 +494,7 @@ async function handleEndpoint(
         'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
       system += HTML_FORMAT_RULES;
       system += adhdSystem(body);
+      system += syllabusSystem(body);
       let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {
@@ -482,6 +528,81 @@ async function handleEndpoint(
         maxTokens: 1200,
       });
       return { message: out.trim() };
+    }
+
+    case '/api/explain-back': {
+      const concept = asNonEmptyString(body.concept) || '(concept)';
+      const userExpl = asNonEmptyString(body.userExplanation) || '';
+      const context = truncate(body.context, 4000);
+      if (!userExpl) throw new Error('Missing explanation');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You evaluate a student\'s spoken/typed explanation of a concept against the source material. Score 0-100 for completeness + correctness. Be encouraging but honest. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES + adhdSystem(body) + syllabusSystem(body),
+        user: `Concept the student is explaining: ${concept}\n\nSource material:\n${context}\n\nStudent's explanation:\n${userExpl}\n\nReturn JSON:\n{\n  "score": number (0-100),\n  "missing": string[] (key points they didn't cover),\n  "goodPoints": string[] (what they got right),\n  "oneLineFix": string (single most important correction)\n}`,
+        maxTokens: 800,
+      });
+    }
+
+    case '/api/syllabus/fetch': {
+      const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel) || '';
+      const examBoard = asNonEmptyString(body.examBoard) || '';
+      const code = asNonEmptyString(body.syllabusCode) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are an expert UK/international exam syllabus specialist. Given a subject + level + board (+ optional spec code), produce the canonical specification context: required topics with relative weighting, official command words, assessment objectives, and a short overview. Use your knowledge of real specifications (AQA, OCR, Edexcel, WJEC, CIE, IB, AP, SAT, etc.). If you are uncertain about exact details, return your best concise summary without fabricating specific code numbers. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `Subject: ${subject}\nLevel: ${examLevel}\nBoard: ${examBoard}\nSpec code: ${code}\n\nReturn JSON:\n{\n  "label": string (e.g. "AQA A-level Biology 7402"),\n  "topics": [{"name": string, "weight"?: string, "notes"?: string}],\n  "commandWords": string[],\n  "assessmentObjectives": string[],\n  "summary": string (2-3 sentences)\n}`,
+        maxTokens: 1500,
+      });
+    }
+
+    case '/api/past-papers/context': {
+      const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel) || '';
+      const examBoard = asNonEmptyString(body.examBoard) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You summarize past-paper patterns for the given subject + level + board. Focus on: typical question stems, command words, mark allocation style, recurring topics, common student pitfalls. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `Subject: ${subject}\nLevel: ${examLevel}\nBoard: ${examBoard}\n\nReturn JSON:\n{\n  "label": string,\n  "patterns": string[] (5-8 typical question patterns),\n  "commonCommandWords": string[],\n  "markAllocationStyle": string (1-2 sentences),\n  "pitfalls": string[] (5-7 frequent mistakes students make)\n}`,
+        maxTokens: 1200,
+      });
+    }
+
+    case '/api/verify-diagram': {
+      const prompt = asNonEmptyString(body.prompt) || '';
+      if (!prompt) throw new Error('Missing prompt');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You audit a study-diagram generation prompt for likely accuracy when rendered by a small open-source image model. Predict legibility, factual accuracy, label issues, and propose a tighter prompt. Return ONLY valid JSON.',
+        user: `Prompt that will be sent to an open image model:\n${prompt}\n\nReturn JSON:\n{\n  "accuracyScore": number (0-100),\n  "issues": string[],\n  "suggestedPromptFix": string\n}`,
+        maxTokens: 400,
+      });
+    }
+
+    case '/api/hallucination-check': {
+      const source = truncate(body.source, 10000);
+      const draft = truncate(body.draft, 10000);
+      if (!source || !draft) throw new Error('Missing source or draft');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are a strict fact-checker. Compare the DRAFT against the SOURCE. Flag claims that are not directly supported by or contradict the source. Be conservative — only flag claims that a teacher would actually push back on. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `SOURCE:\n${source}\n\nDRAFT:\n${draft}\n\nReturn JSON: {"flaggedClaims": [{"text": string (the exact problematic sentence/phrase from the DRAFT, max 25 words), "reason": string, "suggestedFix"?: string}]}\n\nReturn an empty array if everything is well-supported. Maximum 8 flags.`,
+        maxTokens: 1200,
+      });
     }
 
     default:
