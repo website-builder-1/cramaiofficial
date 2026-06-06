@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
+import { FocusWidget } from "@/components/FocusWidget";
 import Home from "./pages/Home";
 import Analyzer from "./pages/Analyzer";
 import Questions from "./pages/Questions";
@@ -39,6 +40,7 @@ const App = () => (
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
+          <FocusWidget />
         </div>
       </BrowserRouter>
     </TooltipProvider>
