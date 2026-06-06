@@ -530,6 +530,81 @@ async function handleEndpoint(
       return { message: out.trim() };
     }
 
+    case '/api/explain-back': {
+      const concept = asNonEmptyString(body.concept) || '(concept)';
+      const userExpl = asNonEmptyString(body.userExplanation) || '';
+      const context = truncate(body.context, 4000);
+      if (!userExpl) throw new Error('Missing explanation');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You evaluate a student\'s spoken/typed explanation of a concept against the source material. Score 0-100 for completeness + correctness. Be encouraging but honest. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES + adhdSystem(body) + syllabusSystem(body),
+        user: `Concept the student is explaining: ${concept}\n\nSource material:\n${context}\n\nStudent's explanation:\n${userExpl}\n\nReturn JSON:\n{\n  "score": number (0-100),\n  "missing": string[] (key points they didn't cover),\n  "goodPoints": string[] (what they got right),\n  "oneLineFix": string (single most important correction)\n}`,
+        maxTokens: 800,
+      });
+    }
+
+    case '/api/syllabus/fetch': {
+      const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel) || '';
+      const examBoard = asNonEmptyString(body.examBoard) || '';
+      const code = asNonEmptyString(body.syllabusCode) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are an expert UK/international exam syllabus specialist. Given a subject + level + board (+ optional spec code), produce the canonical specification context: required topics with relative weighting, official command words, assessment objectives, and a short overview. Use your knowledge of real specifications (AQA, OCR, Edexcel, WJEC, CIE, IB, AP, SAT, etc.). If you are uncertain about exact details, return your best concise summary without fabricating specific code numbers. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `Subject: ${subject}\nLevel: ${examLevel}\nBoard: ${examBoard}\nSpec code: ${code}\n\nReturn JSON:\n{\n  "label": string (e.g. "AQA A-level Biology 7402"),\n  "topics": [{"name": string, "weight"?: string, "notes"?: string}],\n  "commandWords": string[],\n  "assessmentObjectives": string[],\n  "summary": string (2-3 sentences)\n}`,
+        maxTokens: 1500,
+      });
+    }
+
+    case '/api/past-papers/context': {
+      const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel) || '';
+      const examBoard = asNonEmptyString(body.examBoard) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You summarize past-paper patterns for the given subject + level + board. Focus on: typical question stems, command words, mark allocation style, recurring topics, common student pitfalls. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `Subject: ${subject}\nLevel: ${examLevel}\nBoard: ${examBoard}\n\nReturn JSON:\n{\n  "label": string,\n  "patterns": string[] (5-8 typical question patterns),\n  "commonCommandWords": string[],\n  "markAllocationStyle": string (1-2 sentences),\n  "pitfalls": string[] (5-7 frequent mistakes students make)\n}`,
+        maxTokens: 1200,
+      });
+    }
+
+    case '/api/verify-diagram': {
+      const prompt = asNonEmptyString(body.prompt) || '';
+      if (!prompt) throw new Error('Missing prompt');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You audit a study-diagram generation prompt for likely accuracy when rendered by a small open-source image model. Predict legibility, factual accuracy, label issues, and propose a tighter prompt. Return ONLY valid JSON.',
+        user: `Prompt that will be sent to an open image model:\n${prompt}\n\nReturn JSON:\n{\n  "accuracyScore": number (0-100),\n  "issues": string[],\n  "suggestedPromptFix": string\n}`,
+        maxTokens: 400,
+      });
+    }
+
+    case '/api/hallucination-check': {
+      const source = truncate(body.source, 10000);
+      const draft = truncate(body.draft, 10000);
+      if (!source || !draft) throw new Error('Missing source or draft');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are a strict fact-checker. Compare the DRAFT against the SOURCE. Flag claims that are not directly supported by or contradict the source. Be conservative — only flag claims that a teacher would actually push back on. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `SOURCE:\n${source}\n\nDRAFT:\n${draft}\n\nReturn JSON: {"flaggedClaims": [{"text": string (the exact problematic sentence/phrase from the DRAFT, max 25 words), "reason": string, "suggestedFix"?: string}]}\n\nReturn an empty array if everything is well-supported. Maximum 8 flags.`,
+        maxTokens: 1200,
+      });
+    }
+
     default:
       throw new Error(`Unknown endpoint: ${endpoint}`);
   }
