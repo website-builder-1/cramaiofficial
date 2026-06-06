@@ -18,6 +18,7 @@ import { useStudyStore } from '@/lib/store';
 import { type StudyPlan, type LastMinuteReview, createStudyPlan, getLastMinuteReview } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichText } from '@/components/RichText';
 
 export default function StudyPlanPage() {
   const { studyPlan, setStudyPlan, toggleHourComplete, documentContent } = useStudyStore();
@@ -195,17 +196,16 @@ export default function StudyPlanPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className={cn(
-                            'font-semibold',
-                            item.completed && 'line-through'
-                          )}>
-                            {item.topic}
-                          </h4>
+                          <RichText
+                            html={item.topic}
+                            as="h4"
+                            className={cn('font-semibold', item.completed && 'line-through')}
+                          />
                           {item.completed && (
                             <CheckCircle2 className="w-4 h-4 text-success" />
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">{item.activity}</p>
+                        <RichText html={item.activity} className="text-sm text-muted-foreground" />
                       </div>
                       <ChevronRight className="w-5 h-5 text-muted-foreground shrink-0" />
                     </div>
@@ -222,7 +222,7 @@ export default function StudyPlanPage() {
                     {localPlan.tips.map((tip, index) => (
                       <div key={index} className="flex items-start gap-2">
                         <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                        <span className="text-sm text-muted-foreground">{tip}</span>
+                        <RichText html={tip} as="span" className="text-sm text-muted-foreground" />
                       </div>
                     ))}
                   </div>
@@ -253,7 +253,7 @@ export default function StudyPlanPage() {
                         {lastMinuteReview.keyPoints.map((point, i) => (
                           <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
                             <span className="text-primary">•</span>
-                            {point}
+                            <RichText html={point} as="span" />
                           </li>
                         ))}
                       </ul>
@@ -268,7 +268,7 @@ export default function StudyPlanPage() {
                         {lastMinuteReview.mustKnow.map((item, i) => (
                           <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
                             <CheckCircle2 className="w-4 h-4 text-success shrink-0" />
-                            {item}
+                            <RichText html={item} as="span" />
                           </li>
                         ))}
                       </ul>
@@ -279,14 +279,14 @@ export default function StudyPlanPage() {
                       <div className="space-y-2">
                         {lastMinuteReview.quickFormulas.map((formula, i) => (
                           <div key={i} className="p-2 bg-muted rounded-lg font-mono text-sm">
-                            {formula}
+                            <RichText html={formula} as="span" />
                           </div>
                         ))}
                       </div>
                     </div>
 
                     <div className="p-4 rounded-xl gradient-bg text-primary-foreground text-center">
-                      <p className="font-medium">{lastMinuteReview.confidenceBooster}</p>
+                      <RichText html={lastMinuteReview.confidenceBooster} className="font-medium" />
                     </div>
                   </div>
                 )}
