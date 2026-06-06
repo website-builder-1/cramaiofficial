@@ -74,8 +74,11 @@ function adhdSystem(body: Record<string, unknown>): string {
       gentle: 'warm, kind, low-pressure, validating',
       direct: 'crisp, no fluff, action-first, body-double style',
       playful: 'fun, light, dopamine-hitting, emoji okay but minimal',
+      coach: 'firm, motivating, sports-coach style, brief and energizing',
+      dry: 'extremely concise, deadpan, no emoji, no encouragement, just facts',
     } as const;
-    lines.push(`- Tone: ${p.coachTone} (${tone[p.coachTone]}).`);
+    const k = p.coachTone as keyof typeof tone;
+    lines.push(`- Tone: ${k} (${tone[k] ?? ''}).`);
   }
   if (p.struggles?.length) {
     lines.push(`- Known struggles: ${p.struggles.join(', ')}. Proactively scaffold around these.`);
@@ -83,6 +86,48 @@ function adhdSystem(body: Record<string, unknown>): string {
   if (p.rewardsOn) lines.push('- End each response with a tiny, concrete dopamine reward / win.');
   lines.push('- Avoid long walls of text. Prefer short paragraphs, bullets, and clear next actions.');
   return lines.join('\n');
+}
+
+function syllabusSystem(body: Record<string, unknown>): string {
+  const s = body.syllabusContext as
+    | {
+        label?: string;
+        topics?: { name: string; weight?: string; notes?: string }[];
+        commandWords?: string[];
+        assessmentObjectives?: string[];
+        summary?: string;
+      }
+    | undefined;
+  const pp = body.pastPaperContext as
+    | {
+        label?: string;
+        patterns?: string[];
+        commonCommandWords?: string[];
+        markAllocationStyle?: string;
+        pitfalls?: string[];
+      }
+    | undefined;
+  const out: string[] = [];
+  if (s) {
+    out.push('\n\nEXAM-BOARD GROUNDING — produce only content that aligns with this specification:');
+    if (s.label) out.push(`- Specification: ${s.label}`);
+    if (s.summary) out.push(`- Overview: ${s.summary}`);
+    if (s.topics?.length) {
+      out.push('- Required topics: ' + s.topics.map((t) => `${t.name}${t.weight ? ` (${t.weight})` : ''}`).join('; '));
+    }
+    if (s.commandWords?.length) out.push('- Command words to use: ' + s.commandWords.join(', '));
+    if (s.assessmentObjectives?.length) out.push('- Assessment objectives: ' + s.assessmentObjectives.join(' | '));
+    out.push('- DO NOT include content that is outside this specification. If the source material drifts off-spec, narrow to what the spec covers.');
+  }
+  if (pp) {
+    out.push('\nPAST-PAPER ALIGNMENT — mimic the style and weighting of real exam papers:');
+    if (pp.label) out.push(`- Source: ${pp.label}`);
+    if (pp.patterns?.length) out.push('- Common question patterns: ' + pp.patterns.join(' | '));
+    if (pp.commonCommandWords?.length) out.push('- Use these command words verbatim: ' + pp.commonCommandWords.join(', '));
+    if (pp.markAllocationStyle) out.push('- Mark allocation: ' + pp.markAllocationStyle);
+    if (pp.pitfalls?.length) out.push('- Common student pitfalls to surface in mark schemes: ' + pp.pitfalls.join('; '));
+  }
+  return out.join('\n');
 }
 
 async function callAI(opts: {
