@@ -45,6 +45,34 @@ export interface FocusSessionState {
   sound: boolean;
 }
 
+export type ChunkStyle = 'tiny' | 'standard' | 'deep';
+export type CoachTone = 'gentle' | 'direct' | 'playful';
+export type AttentionSpan = 'short' | 'medium' | 'long';
+
+export interface AdhdProfile {
+  onboarded: boolean;
+  hasAdhd: boolean | null; // null = unspecified
+  attentionSpan: AttentionSpan; // drives focus default
+  chunkStyle: ChunkStyle;
+  coachTone: CoachTone;
+  struggles: string[]; // e.g. ['task_initiation','distraction','working_memory','overwhelm','hyperfocus','time_blindness']
+  rewardsOn: boolean;
+  brownNoise: boolean;
+  preferVisuals: boolean;
+}
+
+export const DEFAULT_ADHD_PROFILE: AdhdProfile = {
+  onboarded: false,
+  hasAdhd: null,
+  attentionSpan: 'medium',
+  chunkStyle: 'standard',
+  coachTone: 'gentle',
+  struggles: [],
+  rewardsOn: true,
+  brownNoise: false,
+  preferVisuals: true,
+};
+
 interface StudyState {
   // Document content
   documentContent: string;
@@ -98,6 +126,11 @@ interface StudyState {
   // Focus session
   focus: FocusSessionState;
   setFocus: (patch: Partial<FocusSessionState>) => void;
+
+  // ADHD personalization
+  adhdProfile: AdhdProfile;
+  setAdhdProfile: (patch: Partial<AdhdProfile>) => void;
+  completeOnboarding: (profile: Partial<AdhdProfile>) => void;
   
   // Study plan
   studyPlan: StudyPlan | null;
@@ -249,6 +282,31 @@ export const useStudyStore = create<StudyState>()(
         sound: false,
       },
       setFocus: (patch) => set((s) => ({ focus: { ...s.focus, ...patch } })),
+
+      adhdProfile: DEFAULT_ADHD_PROFILE,
+      setAdhdProfile: (patch) =>
+        set((s) => ({ adhdProfile: { ...s.adhdProfile, ...patch } })),
+      completeOnboarding: (profile) =>
+        set((s) => {
+          const next = { ...s.adhdProfile, ...profile, onboarded: true };
+          // Apply attention span to focus defaults
+          const presets: Record<AttentionSpan, { w: number; b: number }> = {
+            short: { w: 15, b: 3 },
+            medium: { w: 25, b: 5 },
+            long: { w: 50, b: 10 },
+          };
+          const p = presets[next.attentionSpan];
+          return {
+            adhdProfile: next,
+            focus: {
+              ...s.focus,
+              workSec: p.w * 60,
+              breakSec: p.b * 60,
+              durationSec: p.w * 60,
+              sound: next.brownNoise,
+            },
+          };
+        }),
       
       studyPlan: null,
       setStudyPlan: (plan) => set({ studyPlan: plan }),

@@ -14,6 +14,15 @@ const HF_IMAGE_MODELS = [
   'stabilityai/stable-diffusion-xl-base-1.0',
 ];
 
+// HuggingFace migrated away from api-inference.huggingface.co to the
+// Inference Providers router. We try the router first; if that fails for
+// network reasons we fall back to the legacy host, then finally to the
+// Lovable AI Gateway image model so visuals still work.
+const HF_HOSTS = [
+  'https://router.huggingface.co/hf-inference/models',
+  'https://api-inference.huggingface.co/models',
+];
+
 const HTML_FORMAT_RULES =
   '\n\nFORMATTING RULES FOR ALL TEXT FIELDS:\n' +
   '- Do NOT use Markdown. No **bold**, *italics*, # headings, bullet markers (- or *), backticks, or underscores.\n' +
@@ -32,6 +41,45 @@ function jsonResponse(payload: unknown, status = 200) {
 
 function asNonEmptyString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function adhdSystem(body: Record<string, unknown>): string {
+  const p = body.adhdProfile as
+    | {
+        hasAdhd?: boolean | null;
+        attentionSpan?: 'short' | 'medium' | 'long';
+        chunkStyle?: 'tiny' | 'standard' | 'deep';
+        coachTone?: 'gentle' | 'direct' | 'playful';
+        struggles?: string[];
+        rewardsOn?: boolean;
+      }
+    | undefined;
+  if (!p) return '';
+  const lines: string[] = ['\n\nLEARNER PROFILE (personalize to this user):'];
+  if (p.hasAdhd) lines.push('- User has self-identified ADHD. Adapt accordingly.');
+  if (p.attentionSpan) lines.push(`- Attention span: ${p.attentionSpan}.`);
+  if (p.chunkStyle) {
+    const map = {
+      tiny: 'Use very small 1-2 minute micro-steps; never overwhelm.',
+      standard: 'Use 2-5 minute chunks.',
+      deep: 'Allow longer 5-10 minute chunks when concept depth is needed.',
+    } as const;
+    lines.push(`- Chunking style: ${p.chunkStyle} (${map[p.chunkStyle]})`);
+  }
+  if (p.coachTone) {
+    const tone = {
+      gentle: 'warm, kind, low-pressure, validating',
+      direct: 'crisp, no fluff, action-first, body-double style',
+      playful: 'fun, light, dopamine-hitting, emoji okay but minimal',
+    } as const;
+    lines.push(`- Tone: ${p.coachTone} (${tone[p.coachTone]}).`);
+  }
+  if (p.struggles?.length) {
+    lines.push(`- Known struggles: ${p.struggles.join(', ')}. Proactively scaffold around these.`);
+  }
+  if (p.rewardsOn) lines.push('- End each response with a tiny, concrete dopamine reward / win.');
+  lines.push('- Avoid long walls of text. Prefer short paragraphs, bullets, and clear next actions.');
+  return lines.join('\n');
 }
 
 async function callAI(opts: {
@@ -253,7 +301,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an ADHD-aware study coach. Break study material into micro-steps of 2-5 minutes each. Each step must be tiny, concrete, and immediately doable. End each step with a one-line "reward" (what the user will be able to do once finished). Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You are an ADHD-aware study coach. Break study material into micro-steps of 2-5 minutes each. Each step must be tiny, concrete, and immediately doable. End each step with a one-line "reward" (what the user will be able to do once finished). Return ONLY valid JSON.' + HTML_FORMAT_RULES + adhdSystem(body),
         user: `Topic: ${topic}\n\nMaterial:\n${content}\n\nReturn JSON: {"steps": [{"id": string, "title": string, "detail": string, "minutes": number, "reward": string}]}\n\nProduce 4-8 micro-steps. Keep titles under 10 words. "detail" is 1 short sentence. "minutes" between 2 and 5.`,
         maxTokens: 1500,
       });
@@ -265,7 +313,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You help ADHD students beat task-paralysis. Pick the SINGLE easiest, smallest, most rewarding 2-minute starter task from the provided material. No choices, no options, no menu. One task only. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You help ADHD students beat task-paralysis. Pick the SINGLE easiest, smallest, most rewarding 2-minute starter task from the provided material. No choices, no options, no menu. One task only. Return ONLY valid JSON.' + HTML_FORMAT_RULES + adhdSystem(body),
         user: `Material:\n${content}\n\nReturn JSON: {"task": string, "why": string, "minutes": 2}\n\n"task" is the literal action (1 short sentence, e.g. "Read this one definition: ..." or "Try to recall what X means without looking"). "why" is a 1-line encouragement.`,
         maxTokens: 400,
       });
@@ -288,54 +336,90 @@ async function handleEndpoint(
       const prompt = asNonEmptyString(body.prompt);
       if (!prompt) throw new Error('Missing prompt');
       const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
-      if (!hfKey) throw new Error('HUGGINGFACE_API_KEY is not configured.');
-
       const enhanced = `${prompt}, minimalist educational diagram, labeled, flat vector illustration, clean white background, high clarity, study material, no text artifacts`;
 
       let lastErr = '';
-      for (const model of HF_IMAGE_MODELS) {
-        for (let attempt = 0; attempt < 2; attempt++) {
-          try {
-            const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${hfKey}`,
-                'Content-Type': 'application/json',
-                Accept: 'image/png',
-              },
-              body: JSON.stringify({
-                inputs: enhanced,
-                parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
-                options: { wait_for_model: true },
-              }),
-            });
-            if (res.status === 503) {
-              // model loading, retry once
-              await new Promise((r) => setTimeout(r, 4000));
-              continue;
+      if (hfKey) {
+        outer: for (const host of HF_HOSTS) {
+          for (const model of HF_IMAGE_MODELS) {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              try {
+                const res = await fetch(`${host}/${model}`, {
+                  method: 'POST',
+                  headers: {
+                    Authorization: `Bearer ${hfKey}`,
+                    'Content-Type': 'application/json',
+                    Accept: 'image/png',
+                  },
+                  body: JSON.stringify({
+                    inputs: enhanced,
+                    parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
+                    options: { wait_for_model: true },
+                  }),
+                });
+                if (res.status === 503) {
+                  await new Promise((r) => setTimeout(r, 4000));
+                  continue;
+                }
+                if (!res.ok) {
+                  lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
+                  console.error(lastErr);
+                  break; // try next model
+                }
+                const ct = res.headers.get('content-type') || '';
+                if (!ct.startsWith('image/')) {
+                  lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
+                  console.error(lastErr);
+                  break;
+                }
+                const buf = new Uint8Array(await res.arrayBuffer());
+                let bin = '';
+                for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+                const b64 = btoa(bin);
+                return { image: `data:${ct};base64,${b64}`, model: `hf:${model}` };
+              } catch (e) {
+                lastErr = e instanceof Error ? e.message : String(e);
+                console.error('HF fetch error', lastErr);
+              }
             }
-            if (!res.ok) {
-              lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
-              console.error(lastErr);
-              break; // try next model
-            }
-            const ct = res.headers.get('content-type') || '';
-            if (!ct.startsWith('image/')) {
-              lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
-              console.error(lastErr);
-              break;
-            }
-            const buf = new Uint8Array(await res.arrayBuffer());
-            let bin = '';
-            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-            const b64 = btoa(bin);
-            return { image: `data:${ct};base64,${b64}`, model };
-          } catch (e) {
-            lastErr = e instanceof Error ? e.message : String(e);
-            console.error('HF fetch error', lastErr);
           }
         }
+      } else {
+        lastErr = 'HUGGINGFACE_API_KEY not configured';
       }
+
+      // Fallback: Lovable AI image generation so visuals still work when HF is unreachable
+      try {
+        const fallbackRes = await fetch(AI_URL, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'google/gemini-2.5-flash-image',
+            messages: [
+              { role: 'user', content: enhanced },
+            ],
+            modalities: ['image', 'text'],
+          }),
+        });
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          const url: string | undefined =
+            data?.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+            data?.choices?.[0]?.message?.images?.[0]?.url;
+          if (url && url.startsWith('data:image/')) {
+            return { image: url, model: 'lovable-ai:gemini-2.5-flash-image' };
+          }
+          lastErr = `Fallback returned no image. HF error was: ${lastErr}`;
+        } else {
+          lastErr = `Fallback AI ${fallbackRes.status}: ${(await fallbackRes.text()).slice(0, 200)}. HF: ${lastErr}`;
+        }
+      } catch (e) {
+        lastErr = `Fallback failed (${e instanceof Error ? e.message : String(e)}). HF: ${lastErr}`;
+      }
+
       throw new Error(lastErr || 'Image generation failed');
     }
 
@@ -364,6 +448,7 @@ async function handleEndpoint(
       let system =
         'You are CramAI, a friendly and expert AI tutor. Be clear, encouraging, and concise. You have access to the student\'s loaded study material via the provided context — use it to ground every answer and reference specific topics/definitions from it when relevant. When images are attached, perform OCR and visually interpret diagrams, handwriting, charts, or equations as additional study material.';
       system += HTML_FORMAT_RULES;
+      system += adhdSystem(body);
       let userMsg = message || '(see attached image(s))';
 
       if (endpoint === '/api/chat/explain') {

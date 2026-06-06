@@ -16,6 +16,7 @@ import {
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { StatsCluster } from '@/components/StatsCluster';
+import { OnboardingTrigger } from '@/components/AdhdOnboarding';
 
 const navItems = [
   { path: '/', label: 'Home', icon: Sparkles },
@@ -68,6 +69,9 @@ export function Navbar() {
             })}
             <div className="ml-2 pl-2 border-l border-border">
               <StatsCluster />
+            </div>
+            <div className="ml-2 pl-2 border-l border-border">
+              <OnboardingTrigger />
             </div>
           </div>
 
