@@ -26,6 +26,7 @@ import { useStudyStore } from '@/lib/store';
 import { analyzeDocument, type AnalysisResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { RichText } from '@/components/RichText';
 
 const subjects = [
   // Sciences
@@ -373,7 +374,7 @@ export default function Analyzer() {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold mb-1">Analysis Summary</h3>
-                  <p className="text-muted-foreground">{localResult.summary}</p>
+                  <RichText html={localResult.summary} className="text-muted-foreground" />
                 </div>
               </div>
               <div className="flex items-center gap-2 text-sm">
@@ -396,7 +397,7 @@ export default function Analyzer() {
                     key={i}
                     className="px-3 py-1.5 rounded-full bg-accent text-accent-foreground text-sm font-medium"
                   >
-                    {topic}
+                    <RichText html={topic} as="span" />
                   </span>
                 ))}
               </div>
@@ -410,8 +411,8 @@ export default function Analyzer() {
               <div className="space-y-4">
                 {localResult.definitions.map((def, i) => (
                   <div key={i} className="border-l-2 border-primary pl-4">
-                    <p className="font-semibold text-foreground">{def.term}</p>
-                    <p className="text-sm text-muted-foreground">{def.definition}</p>
+                    <RichText html={def.term} className="font-semibold text-foreground" />
+                    <RichText html={def.definition} className="text-sm text-muted-foreground" />
                   </div>
                 ))}
               </div>
@@ -424,7 +425,7 @@ export default function Analyzer() {
                 {localResult.concepts.map((concept, i) => (
                   <div key={i} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
-                    <span className="text-muted-foreground">{concept}</span>
+                    <RichText html={concept} as="span" className="text-muted-foreground" />
                   </div>
                 ))}
               </div>
@@ -437,7 +438,7 @@ export default function Analyzer() {
                 <div className="space-y-2">
                   {localResult.formulas.map((formula, i) => (
                     <div key={i} className="p-3 bg-muted rounded-lg font-mono text-sm">
-                      {formula}
+                      <RichText html={formula} as="span" />
                     </div>
                   ))}
                 </div>
