@@ -1,75 +1,92 @@
-# Fix Practice Questions + Add New Study Features
+## 1. Visuals via Hugging Face
 
-## Root cause of Practice Questions failing
+Model: `black-forest-labs/FLUX.1-schnell` via HF Inference API.
 
-The `cramai-proxy` edge function currently routes everything to Hugging Face's router (`router.huggingface.co/v1/chat/completions`) using `Qwen/Qwen2.5-72B-Instruct` and `Llama-3.3-70B-Instruct`. On HF's router these large models are **not reliably free** — requests frequently fail with 402/404/503 (provider unavailable or out of credits) and the user sees a generic "unexpected error". Chat sometimes works because Llama is occasionally served free; structured tasks like `/api/questions/generate` almost always fail.
+- Best free text-to-image model right now: 4-step generation (fast), Apache 2.0 license, free tier on HF Inference API.
+- Fallback if rate-limited: `stabilityai/stable-diffusion-xl-base-1.0`.
+- Requires a free HF token - I will use the current one in the database, secrets under the name of HUGGINGFACE_API_KEY.
 
-Secondary issues:
-- `response_format: json_object` is silently ignored by some HF providers, so responses come back as prose and `extractJSON` throws.
-- Errors are returned with HTTP 200 + `{error: "..."}`, which the UI shows as a toast but doesn't help us diagnose.
+Where visuals appear:
 
-## Fix: switch to Lovable AI Gateway
+- Notes: There will be a button on the left of Copy in the notes section called "Generate Visualizations" this then generates one concept diagram per section (generated lazily as sections render; cached in store).
+- Flashcards: optional image on card front, generated on demand via "Add visual" button (saves cost/rate limits).
+- AI Tutor Chat:  a "Generate diagram" button on assistant replies.
 
-Lovable AI Gateway is built in, free during the current promo window, and supports the models we need with proper JSON mode. We already have `LOVABLE_API_KEY` set as a project secret.
+Prompt strategy: a small server-side prompt template turns the topic/concept into a clean educational-diagram prompt ("minimalist educational diagram of X, labeled, flat vector, white background"). Images returned as base64 → rendered inline; stored alongside their parent content in Zustand so they persist across navigation (matches existing persistence rules).
 
-Changes to `supabase/functions/cramai-proxy/index.ts`:
-1. Replace `HF_URL` with `https://ai.gateway.lovable.dev/v1/chat/completions`, auth via `LOVABLE_API_KEY`.
-2. Use:
-   - `google/gemini-2.5-flash` for structured tasks (analyze, questions, grade, study-plan, last-minute-review, summary, flashcards, concept-map) — fast, free, strong JSON.
-   - `google/gemini-2.5-flash` for chat too (kept consistent; switch to `gemini-2.5-pro` only if reasoning struggles).
-3. Keep `response_format: { type: "json_object" }` for structured calls (Gemini honors it).
-4. Harden response handling: robust `extractJSON` (already mostly fine) + truncation detection + retry once on parse failure with a stricter "JSON only, no prose" reminder.
-5. Map upstream errors to proper HTTP status (429 → "Rate limited, try again", 402 → "AI credits exhausted") so the UI can show a helpful message.
-6. Keep all existing endpoints + their exact response shapes so no frontend changes are needed for current features.
+Backend: new endpoint `/api/image/generate` in `cramai-proxy` that calls HF Inference API with HUGGINGFACE_API_KEY, handles 503 (model loading) with one retry, returns `{ image: "data:image/png;base64,..." }`.
 
-## New AI study features
+## 2. Light Gamification
 
-Three high-value features added without changing the existing pages:
+Stored locally in Zustand (persisted), no backend changes:
 
-### 1. Smart Flashcards (`/flashcards`)
-- New page that generates flippable Q→A flashcards from the loaded document.
-- New endpoint `/api/flashcards/generate` → returns `{cards: [{front, back, topic, difficulty}]}`.
-- Spaced-repetition lite: user marks "Got it / Review again", stored in Zustand store; "Review again" cards reappear at the end.
+- XP + Level: actions award XP (analyze material 50, generate notes 20, complete flashcard review 5, answer question correctly 10, finish focus session 30).
+- Daily streak: increments when any study action happens today; resets after a missed day.
+- Daily goal ring: target = 100 XP/day, animated ring in navbar.
+- Toast on level-up / streak milestone.
 
-### 2. Smart Summary & Cheat Sheet (`/summary`)
-- One-click condensed summary + bullet cheat sheet for the loaded material.
-- New endpoint `/api/summary/generate` → returns `{tldr, bulletSummary[], cheatSheet[], keyTerms[]}`.
-- Useful for a true "cram in 24h" workflow.
+UI: compact stats cluster in `Navbar` (level badge, streak flame, XP ring). New `src/lib/gamification.ts` with `awardXp(amount, reason)` helper called from existing pages.
 
-### 3. Concept Map (`/concept-map`)
-- Visual graph of how the material's concepts connect.
-- New endpoint `/api/concept-map/generate` → returns `{nodes: [{id, label, group}], edges: [{from, to, label}]}`.
-- Rendered with a lightweight force-directed view (CSS+SVG, no extra deps) — node click opens an "Explain this" prompt routed through the existing `/api/chat/explain`.
+## 3. ADHD-focused features
 
-All three features:
-- Pull `documentContent` from the existing `useStudyStore` (so they work right after Analyzer).
-- Show the existing `LoadingCard` / toast pattern for consistency.
-- Get a nav link in `Navbar.tsx` and a card on the Home page.
+Researched-backed pain points → features:
 
-## Frontend client additions (`src/lib/api.ts`)
-- `generateFlashcards(content)` → `Flashcard[]`
-- `generateSummary(content)` → `SummaryResult`
-- `generateConceptMap(content)` → `ConceptMap`
+### A. Focus Mode + Pomodoro timer
 
-Types added alongside existing exports; no breaking changes.
+- Floating focus widget (bottom-right), accessible from any page.
+- 25/5 default, configurable (15/3, 50/10).
+- "Focus Mode" toggle: hides navbar visuals, dims non-essential UI, soft brown-noise toggle (optional, off by default — uses Web Audio API, no asset).
+- Hyperfocus nudge: after 20 min continuous activity, gentle banner "You've been at it 20 min — stand up, water, stretch."
+- Awards XP on completed sessions.
 
-## Validation
-- After deploying, hit `/api/questions/generate` via the edge function curl tool with sample content; confirm 200 + parsed questions.
-- Verify Practice Questions UI generates and grades cleanly.
-- Verify the three new pages render output from real material.
+### B. Micro-chunking
 
-## Files touched
+- New backend endpoint `/api/chunk` that takes the current analyzer content (or a notes section) and returns an array of 2–5 min bite-size steps with estimated minutes and a one-line dopamine reward ("✓ You'll be able to explain X").
+- New "Break it down" button on Notes sections and on Study Plan items → renders a vertical checklist; checking a step awards XP.
 
-```text
-edit    supabase/functions/cramai-proxy/index.ts   (switch to Lovable AI, add 3 endpoints, harden JSON)
-edit    src/lib/api.ts                             (new client fns + types)
-edit    src/lib/store.ts                           (flashcard state, summary cache)
-edit    src/components/Navbar.tsx                  (3 new nav links)
-edit    src/pages/Home.tsx                         (3 new feature cards)
-new     src/pages/Flashcards.tsx
-new     src/pages/Summary.tsx
-new     src/pages/ConceptMap.tsx
-edit    src/App.tsx                                (3 new routes)
-```
+### C. Task initiation helper ("Just Start")
 
-No DB migrations, no new secrets — `LOVABLE_API_KEY` is already configured.
+- Big button on Home + Study Plan: "Just Start (2 min)".
+- Calls `/api/just-start` which picks the single easiest next 2-min task from current material (e.g., "Read this one definition: …" or "Try this 1 flashcard"). Bypasses choice paralysis.
+- Starts a 2-min mini-timer; on complete, asks "Keep going?" with a one-tap continue.
+
+### D. Working-memory aids
+
+- Sticky "Context bar" at top of Notes/Questions/Flashcards/Chat showing current material title + "Where was I?" button that scrolls/jumps to last interacted item (tracked per page in store).
+- "Quick Recap" button on every page → calls `/api/recap` returning a 3-bullet refresher of what the user just covered (uses last viewed section + recent actions).
+- Voice capture in AI Tutor Chat: mic button uses Web Speech API (browser-native, free) to dictate questions — helps when typing breaks the thought.
+
+## Technical Section
+
+### New/modified files
+
+- `supabase/functions/cramai-proxy/index.ts` — add `/api/image/generate` (HF), `/api/chunk`, `/api/just-start`, `/api/recap`.
+- `src/lib/hfImage.ts` — small client helper that calls the proxy and returns a data URL.
+- `src/lib/gamification.ts` — XP/level/streak logic + zustand slice in `src/lib/store.ts`.
+- `src/lib/store.ts` — add `gamification`, `focusSession`, `lastViewed` per-page, cache for generated images keyed by content hash.
+- `src/components/FocusWidget.tsx` — floating pomodoro + focus mode.
+- `src/components/StatsCluster.tsx` — navbar XP/streak display.
+- `src/components/ContextBar.tsx` — sticky working-memory bar.
+- `src/components/JustStartButton.tsx` — task initiation CTA.
+- `src/components/ChunkList.tsx` — micro-chunked checklist UI.
+- `src/components/VoiceInput.tsx` — Web Speech API wrapper for Chat.
+- `src/components/ConceptImage.tsx` — handles HF image load/skeleton/error/retry.
+- Pages updated: `Notes.tsx`, `Summary.tsx`, `Flashcards.tsx`, `Chat.tsx`, `Home.tsx`, `StudyPlan.tsx`, `Navbar.tsx`, `App.tsx` (mount FocusWidget globally).
+
+### Persistence rules (unchanged)
+
+- Generated images cached in store under content hash so navigation doesn't re-trigger HF calls.
+- Cleared only when new material is analyzed (reuse existing `resetGeneratedContent`) or the user hits a "Regenerate" button.
+
+### Out of scope (call out)
+
+- No backend leaderboard / per-user XP sync (you picked Light gamification — kept local).
+- No avatar/pet system.
+- No mobile app changes beyond responsive web.
+
+### Risks
+
+- HF cold start / rate limits: mitigated by lazy generation, caching, single retry, skeleton UI, "Generate visual" button rather than auto-generating dozens at once.
+- Web Speech API not supported in all browsers (Safari iOS quirky): feature-detect and hide the mic button when unsupported.  
+  
+**USE AN AI FROM HUGGINGFACE USING THE ACCESS TOKEN ALREADY STORED IN SECRETS TO GENERATE IMAGES WITH UNLIMITED USE AND WOULD WORK WELL FOR GENERATING VISUALS FOR NOTES AND STUDYING!**
