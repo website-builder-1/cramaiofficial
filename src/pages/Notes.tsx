@@ -6,12 +6,16 @@ import { useStudyStore } from '@/lib/store';
 import { generateNotes, type NotesResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
+import { ConceptImage } from '@/components/ConceptImage';
+import { ChunkList } from '@/components/ChunkList';
+import { Image as ImageIcon } from 'lucide-react';
 
 export default function Notes() {
-  const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData } = useStudyStore();
+  const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData, awardXp } = useStudyStore();
   const material = getStudyMaterial();
   const data = notesData;
   const [loading, setLoading] = useState(false);
+  const [showVisuals, setShowVisuals] = useState(false);
 
   const handleGenerate = async () => {
     if (!material || material.length < 10) {
@@ -26,6 +30,7 @@ export default function Notes() {
       return;
     }
     setNotesData(res.data);
+    awardXp(20);
     toast.success('Notes ready!');
   };
 
@@ -106,6 +111,15 @@ export default function Notes() {
         ) : (
           <div className="space-y-6 animate-slide-up">
             <div className="flex flex-wrap gap-2 justify-end">
+              <Button
+                variant={showVisuals ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setShowVisuals((v) => !v)}
+                className="gap-2"
+                title="Generate AI diagrams for each section"
+              >
+                <ImageIcon className="w-4 h-4" /> {showVisuals ? 'Hide Visuals' : 'Generate Visualizations'}
+              </Button>
               <Button variant="outline" size="sm" onClick={copyAll} className="gap-2">
                 <Copy className="w-4 h-4" /> Copy
               </Button>
@@ -139,6 +153,20 @@ export default function Notes() {
                     </ul>
                   </div>
                 )}
+                {showVisuals && (
+                  <div className="mt-4">
+                    <ConceptImage
+                      prompt={`${s.heading.replace(/<[^>]+>/g, '').slice(0, 200)} (${subject || 'study topic'})`}
+                      cacheKey={`notes:${data.title}:${i}`}
+                    />
+                  </div>
+                )}
+                <div className="mt-3">
+                  <ChunkList
+                    content={`${s.heading.replace(/<[^>]+>/g, '')}\n\n${(s.body || '').replace(/<[^>]+>/g, '')}\n${(s.bullets || []).map((b) => '- ' + b.replace(/<[^>]+>/g, '')).join('\n')}`}
+                    topic={s.heading.replace(/<[^>]+>/g, '').slice(0, 100)}
+                  />
+                </div>
               </div>
             ))}
 
