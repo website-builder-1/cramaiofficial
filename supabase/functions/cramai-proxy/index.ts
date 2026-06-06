@@ -253,7 +253,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.' + HTML_FORMAT_RULES,
+          'You are an expert exam-prep tutor. When images are provided, perform OCR and visually interpret diagrams, handwriting, charts, and equations as study material. When an exam level and board (e.g. GCSE AQA, A-level OCR, IB) are provided, tailor topics, depth, definitions, and required formulas to that specification. Return ONLY valid JSON matching the schema. No prose, no markdown.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: userPayload,
       });
     }
@@ -270,8 +270,8 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You generate high-quality exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material.\n\nRULES PER TYPE:\n- multiple-choice: provide 4 plausible options in "options"; "correctAnswer" must equal one option verbatim.\n- true-false: "options" = ["True","False"]; "correctAnswer" = "True" or "False".\n- short-answer: NO options. "correctAnswer" is a 1-3 sentence model answer covering the required points.\n- essay: NO options. "question" is a real essay prompt (e.g. "Discuss...", "Evaluate...", "To what extent..."). "correctAnswer" is a detailed mark-scheme / model answer (3-6 sentences) listing the key arguments, evidence, and structure expected. Match the exam-board command words and depth.\n\nReturn ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES,
-        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (ONLY for multiple-choice/true-false — omit for short-answer/essay),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string\n}\n\nReturn: {"questions": [...]}`,
+          'You generate high-quality exam questions STRICTLY from the provided study material. Never invent off-topic questions. Each question\'s "topic" must come from the material.\n\nRULES PER TYPE:\n- multiple-choice: provide 4 plausible options in "options"; "correctAnswer" must equal one option verbatim.\n- true-false: "options" = ["True","False"]; "correctAnswer" = "True" or "False".\n- short-answer: NO options. "correctAnswer" is a 1-3 sentence model answer covering the required points.\n- essay: NO options. "question" is a real essay prompt. "correctAnswer" is a detailed model answer.\n\nEVERY question MUST also include a "markScheme" object: { "points": [{"point": string, "marks": number}], "totalMarks": number, "examinerNotes"?: string, "commonMistakes"?: string[] }. Allocate marks the way a real examiner for this board/level would. For MCQ/TF, totalMarks is 1 and points has a single entry.\n\nReturn ONLY valid JSON: an object {"questions": Question[]}. No prose, no markdown.' + HTML_FORMAT_RULES + syllabusSystem(body),
+        user: `${ctx}Material:\n${content}\n\nGenerate ${count} ${difficulty} difficulty questions of types: ${types.join(', ')}.\nALL questions must be grounded in the material above and (if specified) appropriate for the given exam level/board.\n\nEach Question has:\n{\n  "id": string,\n  "type": "multiple-choice" | "short-answer" | "essay" | "true-false",\n  "question": string,\n  "options"?: string[] (ONLY for multiple-choice/true-false),\n  "correctAnswer": string,\n  "explanation": string,\n  "difficulty": "easy" | "medium" | "hard",\n  "topic": string,\n  "markScheme": {"points":[{"point":string,"marks":number}],"totalMarks":number,"examinerNotes"?:string,"commonMistakes"?:string[]}\n}\n\nReturn: {"questions": [...]}`,
         maxTokens: 3500,
       });
       return Array.isArray(parsed) ? parsed : (parsed.questions || []);
@@ -310,7 +310,7 @@ async function handleEndpoint(
       const parsed = await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        system: 'You create high-quality study flashcards STRICTLY from the provided material. Never invent off-topic cards. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nGenerate ${count} flashcards covering the most important concepts in the material above. Match the depth to the exam level/board if provided.\n\nReturn JSON: {"cards": [{"id": string, "front": string, "back": string, "topic": string, "difficulty": "easy"|"medium"|"hard"}]}`,
         maxTokens: 3000,
       });
@@ -323,7 +323,7 @@ async function handleEndpoint(
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
-        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        system: 'You create concise, exam-ready summaries STRICTLY from the provided material. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "tldr": string,\n  "bulletSummary": string[],\n  "cheatSheet": string[],\n  "keyTerms": [{"term": string, "definition": string}]\n}`,
         maxTokens: 2500,
       });
@@ -336,7 +336,7 @@ async function handleEndpoint(
         apiKey,
         model: MODEL_STRUCTURED,
         system:
-          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+          'You write detailed, well-structured study notes STRICTLY from the provided material. Organize logically with clear headings, explain concepts in your own words, define terms, include examples, and call out formulas where relevant. Match depth to the exam level/board if given. Return ONLY valid JSON.' + HTML_FORMAT_RULES + syllabusSystem(body),
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "title": string,\n  "overview": string,\n  "sections": [{"heading": string, "body": string, "bullets": string[], "examples": string[]}],\n  "keyTakeaways": string[]\n}\n\nProduce 4-8 sections. Each section should have a body paragraph PLUS bullets. Include examples where helpful. Empty arrays are allowed but prefer rich content.`,
         maxTokens: 4000,
       });
