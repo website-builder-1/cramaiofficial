@@ -9,6 +9,11 @@ const AI_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const MODEL_CHAT = 'google/gemini-2.5-flash';
 const MODEL_STRUCTURED = 'google/gemini-2.5-flash';
 
+const HF_IMAGE_MODELS = [
+  'black-forest-labs/FLUX.1-schnell',
+  'stabilityai/stable-diffusion-xl-base-1.0',
+];
+
 const HTML_FORMAT_RULES =
   '\n\nFORMATTING RULES FOR ALL TEXT FIELDS:\n' +
   '- Do NOT use Markdown. No **bold**, *italics*, # headings, bullet markers (- or *), backticks, or underscores.\n' +
@@ -239,6 +244,99 @@ async function handleEndpoint(
         user: `${ctx}Material:\n${content}\n\nReturn JSON:\n{\n  "title": string,\n  "overview": string,\n  "sections": [{"heading": string, "body": string, "bullets": string[], "examples": string[]}],\n  "keyTakeaways": string[]\n}\n\nProduce 4-8 sections. Each section should have a body paragraph PLUS bullets. Include examples where helpful. Empty arrays are allowed but prefer rich content.`,
         maxTokens: 4000,
       });
+    }
+
+    case '/api/chunk': {
+      const content = truncate(body.content, 6000);
+      const topic = asNonEmptyString(body.topic) || 'this material';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are an ADHD-aware study coach. Break study material into micro-steps of 2-5 minutes each. Each step must be tiny, concrete, and immediately doable. End each step with a one-line "reward" (what the user will be able to do once finished). Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        user: `Topic: ${topic}\n\nMaterial:\n${content}\n\nReturn JSON: {"steps": [{"id": string, "title": string, "detail": string, "minutes": number, "reward": string}]}\n\nProduce 4-8 micro-steps. Keep titles under 10 words. "detail" is 1 short sentence. "minutes" between 2 and 5.`,
+        maxTokens: 1500,
+      });
+    }
+
+    case '/api/just-start': {
+      const content = truncate(body.content, 5000);
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You help ADHD students beat task-paralysis. Pick the SINGLE easiest, smallest, most rewarding 2-minute starter task from the provided material. No choices, no options, no menu. One task only. Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        user: `Material:\n${content}\n\nReturn JSON: {"task": string, "why": string, "minutes": 2}\n\n"task" is the literal action (1 short sentence, e.g. "Read this one definition: ..." or "Try to recall what X means without looking"). "why" is a 1-line encouragement.`,
+        maxTokens: 400,
+      });
+    }
+
+    case '/api/recap': {
+      const content = truncate(body.content, 5000);
+      const focus = asNonEmptyString(body.focus) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You produce a fast, ADHD-friendly recap: 3 short bullets answering "where was I and what matters?". Return ONLY valid JSON.' + HTML_FORMAT_RULES,
+        user: `Material:\n${content}\n\n${focus ? `Recently focused on: ${focus}\n\n` : ''}Return JSON: {"bullets": string[]}\nExactly 3 bullets, each under 18 words.`,
+        maxTokens: 400,
+      });
+    }
+
+    case '/api/image/generate': {
+      const prompt = asNonEmptyString(body.prompt);
+      if (!prompt) throw new Error('Missing prompt');
+      const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
+      if (!hfKey) throw new Error('HUGGINGFACE_API_KEY is not configured.');
+
+      const enhanced = `${prompt}, minimalist educational diagram, labeled, flat vector illustration, clean white background, high clarity, study material, no text artifacts`;
+
+      let lastErr = '';
+      for (const model of HF_IMAGE_MODELS) {
+        for (let attempt = 0; attempt < 2; attempt++) {
+          try {
+            const res = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${hfKey}`,
+                'Content-Type': 'application/json',
+                Accept: 'image/png',
+              },
+              body: JSON.stringify({
+                inputs: enhanced,
+                parameters: { num_inference_steps: 4, guidance_scale: 0.0 },
+                options: { wait_for_model: true },
+              }),
+            });
+            if (res.status === 503) {
+              // model loading, retry once
+              await new Promise((r) => setTimeout(r, 4000));
+              continue;
+            }
+            if (!res.ok) {
+              lastErr = `HF ${model} ${res.status}: ${(await res.text()).slice(0, 200)}`;
+              console.error(lastErr);
+              break; // try next model
+            }
+            const ct = res.headers.get('content-type') || '';
+            if (!ct.startsWith('image/')) {
+              lastErr = `HF ${model} returned ${ct}: ${(await res.text()).slice(0, 200)}`;
+              console.error(lastErr);
+              break;
+            }
+            const buf = new Uint8Array(await res.arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+            const b64 = btoa(bin);
+            return { image: `data:${ct};base64,${b64}`, model };
+          } catch (e) {
+            lastErr = e instanceof Error ? e.message : String(e);
+            console.error('HF fetch error', lastErr);
+          }
+        }
+      }
+      throw new Error(lastErr || 'Image generation failed');
     }
 
     case '/api/chat':

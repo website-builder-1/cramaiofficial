@@ -96,6 +96,7 @@ export default function Analyzer() {
     analysisResult,
     resetGeneratedContent,
   } = useStudyStore();
+  const awardXp = useStudyStore((s) => s.awardXp);
   
   const [textInput, setTextInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -208,6 +209,7 @@ export default function Analyzer() {
     if (response.data) {
       setLocalResult(response.data);
       setAnalysisResult(response.data);
+      awardXp(50);
       toast.success('Analysis complete!');
     }
     

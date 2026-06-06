@@ -15,10 +15,13 @@ import {
   X,
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep } from '@/lib/api';
+import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep, quickRecap } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
+import { ConceptImage } from '@/components/ConceptImage';
+import { VoiceInput } from '@/components/VoiceInput';
+import { Brain } from 'lucide-react';
 
 const quickActions = [
   { icon: Lightbulb, label: 'Explain this concept', action: 'explain' },
@@ -34,10 +37,11 @@ const suggestedQuestions = [
 ];
 
 export default function Chat() {
-  const { chatHistory, addChatMessage, clearChatHistory, getStudyMaterial, subject, examLevel, examBoard } = useStudyStore();
+  const { chatHistory, addChatMessage, clearChatHistory, getStudyMaterial, subject, examLevel, examBoard, awardXp } = useStudyStore();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
+  const [diagramFor, setDiagramFor] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -162,9 +166,24 @@ export default function Chat() {
         timestamp: new Date(),
       };
       addChatMessage(assistantMessage);
+      awardXp(3);
     }
     
     setIsLoading(false);
+  };
+
+  const handleRecap = async () => {
+    const material = getStudyMaterial();
+    if (!material) { toast.error('No material loaded.'); return; }
+    setIsLoading(true);
+    const res = await quickRecap(material);
+    setIsLoading(false);
+    if (res.error || !res.data) { toast.error(res.error || 'Recap failed'); return; }
+    addChatMessage({
+      role: 'assistant',
+      content: `<p><strong>Quick recap:</strong></p><ul>${res.data.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>`,
+      timestamp: new Date(),
+    });
   };
 
   const handleQuickAction = (action: string) => {
@@ -218,6 +237,9 @@ export default function Chat() {
               </Button>
             );
           })}
+          <Button variant="outline" size="sm" onClick={handleRecap} className="gap-2" disabled={isLoading}>
+            <Brain className="w-4 h-4" /> Quick Recap
+          </Button>
         </div>
 
         {/* Chat Area */}
@@ -277,7 +299,25 @@ export default function Chat() {
                       )}
                     >
                       {msg.role === 'assistant' ? (
-                        <RichText html={msg.content} className="text-sm" />
+                        <>
+                          <RichText html={msg.content} className="text-sm" />
+                          <div className="mt-2">
+                            {diagramFor === index ? (
+                              <ConceptImage
+                                prompt={msg.content.replace(/<[^>]+>/g, '').slice(0, 300)}
+                                cacheKey={`chat:${msg.timestamp instanceof Date ? msg.timestamp.toISOString() : msg.timestamp}`}
+                                label="Generating diagram..."
+                              />
+                            ) : (
+                              <button
+                                onClick={() => setDiagramFor(index)}
+                                className="text-[11px] text-primary hover:underline"
+                              >
+                                + Generate diagram
+                              </button>
+                            )}
+                          </div>
+                        </>
                       ) : (
                         <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
                       )}
@@ -352,11 +392,15 @@ export default function Chat() {
               >
                 <Paperclip className="w-4 h-4" />
               </Button>
+              <VoiceInput
+                onTranscript={(text) => setMessage((m) => (m ? m + ' ' : '') + text)}
+                disabled={isLoading}
+              />
               <Input
                 ref={inputRef}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                placeholder="Ask your AI tutor anything... (paste images with ⌘/Ctrl+V)"
+                placeholder="Ask, paste images (⌘/Ctrl+V), or use the mic..."
                 disabled={isLoading}
                 className="flex-1"
               />

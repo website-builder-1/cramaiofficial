@@ -7,6 +7,7 @@ import { generateFlashcards, type Flashcard } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
+import { ConceptImage } from '@/components/ConceptImage';
 
 export default function Flashcards() {
   const {
@@ -16,6 +17,7 @@ export default function Flashcards() {
     examBoard,
     flashcardsState,
     setFlashcardsState,
+    awardXp,
   } = useStudyStore();
   const material = getStudyMaterial();
   const [loading, setLoading] = useState(false);
@@ -65,6 +67,7 @@ export default function Flashcards() {
   const markGot = () => {
     if (!current) return;
     const n = new Set(reviewIds); n.delete(current.id);
+    awardXp(5);
     updateState({ reviewIds: Array.from(n), flipped: false, index: (index + 1) % cards.length });
   };
   const markReview = () => {
@@ -122,6 +125,16 @@ export default function Flashcards() {
                 />
                 <p className="text-xs text-muted-foreground mt-6">Click card to flip</p>
               </div>
+            </div>
+
+            {/* Visual for this card */}
+            <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+              <ConceptImage
+                prompt={`${current.front.replace(/<[^>]+>/g, '').slice(0, 200)} (${current.topic})`}
+                cacheKey={`flashcard:${current.id}`}
+                label="Add visual"
+                className="w-full max-w-md"
+              />
             </div>
 
             <div className="flex flex-wrap gap-3 justify-center">

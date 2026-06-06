@@ -25,6 +25,26 @@ export interface QuestionsState {
   gradeResult: GradeResult | null;
 }
 
+export interface GamificationState {
+  xp: number;
+  level: number;
+  streak: number;
+  lastActiveDate: string; // YYYY-MM-DD
+  todayXp: number;
+  todayDate: string;
+}
+
+export interface FocusSessionState {
+  active: boolean;
+  mode: 'work' | 'break';
+  startedAt: number; // ms epoch
+  durationSec: number;
+  workSec: number;
+  breakSec: number;
+  focusModeUI: boolean; // dim UI
+  sound: boolean;
+}
+
 interface StudyState {
   // Document content
   documentContent: string;
@@ -66,6 +86,18 @@ interface StudyState {
 
   // Reset only the generated content (used when new material is analyzed)
   resetGeneratedContent: () => void;
+
+  // Cache: prompt -> data URL image
+  imageCache: Record<string, string>;
+  setCachedImage: (key: string, dataUrl: string) => void;
+
+  // Gamification
+  gamification: GamificationState;
+  awardXp: (amount: number) => { leveledUp: boolean; newLevel: number };
+
+  // Focus session
+  focus: FocusSessionState;
+  setFocus: (patch: Partial<FocusSessionState>) => void;
   
   // Study plan
   studyPlan: StudyPlan | null;
@@ -84,6 +116,9 @@ interface StudyState {
   // Reset all
   resetAll: () => void;
 }
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+const xpForLevel = (level: number) => 100 * level; // simple curve
 
 export const useStudyStore = create<StudyState>()(
   persist(
@@ -149,7 +184,71 @@ export const useStudyStore = create<StudyState>()(
           questions: [],
           studyPlan: null,
           weakTopics: [],
+          imageCache: {},
         }),
+
+      imageCache: {},
+      setCachedImage: (key, dataUrl) =>
+        set((s) => ({ imageCache: { ...s.imageCache, [key]: dataUrl } })),
+
+      gamification: {
+        xp: 0,
+        level: 1,
+        streak: 0,
+        lastActiveDate: '',
+        todayXp: 0,
+        todayDate: todayStr(),
+      },
+      awardXp: (amount) => {
+        const today = todayStr();
+        const g = get().gamification;
+        // Streak handling
+        let streak = g.streak;
+        if (g.lastActiveDate !== today) {
+          const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+          if (g.lastActiveDate === yesterday) streak = g.streak + 1;
+          else if (!g.lastActiveDate) streak = 1;
+          else streak = 1;
+        }
+        const todayXp = g.todayDate === today ? g.todayXp + amount : amount;
+        const xp = g.xp + amount;
+        let level = g.level;
+        let needed = xpForLevel(level);
+        let leveledUp = false;
+        let remaining = xp;
+        // compute level from total xp
+        let l = 1;
+        let acc = 0;
+        while (acc + xpForLevel(l) <= xp) {
+          acc += xpForLevel(l);
+          l += 1;
+        }
+        if (l > g.level) leveledUp = true;
+        level = l;
+        set({
+          gamification: {
+            xp,
+            level,
+            streak,
+            lastActiveDate: today,
+            todayXp,
+            todayDate: today,
+          },
+        });
+        return { leveledUp, newLevel: level };
+      },
+
+      focus: {
+        active: false,
+        mode: 'work',
+        startedAt: 0,
+        durationSec: 25 * 60,
+        workSec: 25 * 60,
+        breakSec: 5 * 60,
+        focusModeUI: false,
+        sound: false,
+      },
+      setFocus: (patch) => set((s) => ({ focus: { ...s.focus, ...patch } })),
       
       studyPlan: null,
       setStudyPlan: (plan) => set({ studyPlan: plan }),
