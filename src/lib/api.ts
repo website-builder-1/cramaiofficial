@@ -128,13 +128,32 @@ export async function createStudyPlan(params: {
   return apiRequest<StudyPlan>('/api/study-plan/create', params);
 }
 
+// ADHD profile hint passed to coaching endpoints
+export interface AdhdHint {
+  hasAdhd?: boolean | null;
+  attentionSpan?: 'short' | 'medium' | 'long';
+  chunkStyle?: 'tiny' | 'standard' | 'deep';
+  coachTone?: 'gentle' | 'direct' | 'playful';
+  struggles?: string[];
+  rewardsOn?: boolean;
+}
+
+let currentAdhdHint: AdhdHint | null = null;
+export function setAdhdHint(hint: AdhdHint | null) {
+  currentAdhdHint = hint;
+}
+function withHint<T extends Record<string, unknown>>(body: T): T {
+  if (currentAdhdHint) (body as Record<string, unknown>).adhdProfile = currentAdhdHint;
+  return body;
+}
+
 export async function sendChatMessage(
   message: string,
   context: string,
   history: ChatMessage[],
   images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat', { message, context, history, images });
+  return apiRequest<ChatResponse>('/api/chat', withHint({ message, context, history, images }));
 }
 
 export async function explainConcept(
@@ -142,7 +161,7 @@ export async function explainConcept(
   context: string,
   images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/explain', { concept, context, images });
+  return apiRequest<ChatResponse>('/api/chat/explain', withHint({ concept, context, images }));
 }
 
 export async function getHint(
@@ -150,7 +169,7 @@ export async function getHint(
   context: string,
   images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/hint', { problem, context, images });
+  return apiRequest<ChatResponse>('/api/chat/hint', withHint({ problem, context, images }));
 }
 
 export async function solveStepByStep(
@@ -158,7 +177,7 @@ export async function solveStepByStep(
   context: string,
   images?: string[],
 ): Promise<ApiResponse<ChatResponse>> {
-  return apiRequest<ChatResponse>('/api/chat/solve-step', { problem, context, images });
+  return apiRequest<ChatResponse>('/api/chat/solve-step', withHint({ problem, context, images }));
 }
 
 // New features
@@ -228,11 +247,11 @@ export interface ChunkStep {
 }
 
 export async function chunkContent(content: string, topic?: string): Promise<ApiResponse<{ steps: ChunkStep[] }>> {
-  return apiRequest<{ steps: ChunkStep[] }>('/api/chunk', { content, topic });
+  return apiRequest<{ steps: ChunkStep[] }>('/api/chunk', withHint({ content, topic }));
 }
 
 export async function justStartTask(content: string): Promise<ApiResponse<{ task: string; why: string; minutes: number }>> {
-  return apiRequest<{ task: string; why: string; minutes: number }>('/api/just-start', { content });
+  return apiRequest<{ task: string; why: string; minutes: number }>('/api/just-start', withHint({ content }));
 }
 
 export async function quickRecap(content: string, focus?: string): Promise<ApiResponse<{ bullets: string[] }>> {
