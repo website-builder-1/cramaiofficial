@@ -6,6 +6,7 @@ import { useStudyStore } from '@/lib/store';
 import { generateFlashcards, type Flashcard } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { RichText } from '@/components/RichText';
 
 export default function Flashcards() {
   const {
@@ -115,9 +116,10 @@ export default function Flashcards() {
                 <div className="text-xs uppercase tracking-wide text-muted-foreground mb-3">
                   {flipped ? 'Answer' : 'Question'} · {current.topic}
                 </div>
-                <p className="text-xl md:text-2xl font-medium">
-                  {flipped ? current.back : current.front}
-                </p>
+                <RichText
+                  html={flipped ? current.back : current.front}
+                  className="text-xl md:text-2xl font-medium"
+                />
                 <p className="text-xs text-muted-foreground mt-6">Click card to flip</p>
               </div>
             </div>
