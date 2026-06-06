@@ -245,6 +245,45 @@ export function AdhdOnboarding({ open, onClose }: Props) {
                   />
                   <span className="text-sm">Turn on brown-noise by default in focus sessions</span>
                 </Label>
+                <div className="pt-2 border-t border-border space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Focus tools</p>
+                  <Label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer">
+                    <Checkbox checked={draft.driftOn} onCheckedChange={(v) => setDraft((d) => ({ ...d, driftOn: !!v }))} />
+                    <span className="text-sm">Drift detection — tiny refocus quiz when I zone out</span>
+                  </Label>
+                  <Label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer">
+                    <Checkbox checked={draft.scratchpadOn} onCheckedChange={(v) => setDraft((d) => ({ ...d, scratchpadOn: !!v }))} />
+                    <span className="text-sm">Scratchpad — park stray thoughts without losing focus</span>
+                  </Label>
+                  <Label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer">
+                    <Checkbox checked={draft.voiceFirst} onCheckedChange={(v) => setDraft((d) => ({ ...d, voiceFirst: !!v }))} />
+                    <span className="text-sm">Voice-first — read answers aloud, speak instead of type</span>
+                  </Label>
+                  <Label className="flex items-center gap-3 p-2 rounded-lg cursor-pointer">
+                    <Checkbox checked={draft.hallucinationCheck} onCheckedChange={(v) => setDraft((d) => ({ ...d, hallucinationCheck: !!v }))} />
+                    <span className="text-sm">Accuracy check — flag claims that may be wrong</span>
+                  </Label>
+                  <div className="p-2">
+                    <p className="text-sm mb-2">Hyperfocus brake</p>
+                    <RadioGroup
+                      value={String(draft.hyperfocusMinutes)}
+                      onValueChange={(v) => setDraft((d) => ({ ...d, hyperfocusMinutes: Number(v) as 0 | 30 | 45 | 60 }))}
+                      className="flex flex-wrap gap-2"
+                    >
+                      {[
+                        { v: '0', l: 'Off' },
+                        { v: '30', l: '30 min' },
+                        { v: '45', l: '45 min' },
+                        { v: '60', l: '60 min' },
+                      ].map((o) => (
+                        <Label key={o.v} htmlFor={`hf-${o.v}`} className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border cursor-pointer text-xs">
+                          <RadioGroupItem value={o.v} id={`hf-${o.v}`} />
+                          {o.l}
+                        </Label>
+                      ))}
+                    </RadioGroup>
+                  </div>
+                </div>
               </div>
             </div>
           )}

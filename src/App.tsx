@@ -6,6 +6,12 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { FocusWidget } from "@/components/FocusWidget";
 import { OnboardingGate } from "@/components/AdhdOnboarding";
+import { HyperfocusBrake } from "@/components/HyperfocusBrake";
+import { ScratchpadPanel } from "@/components/ScratchpadPanel";
+import { useActiveTimer } from "@/hooks/useActiveTimer";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import { useStudyStore } from "@/lib/store";
 import Home from "./pages/Home";
 import Analyzer from "./pages/Analyzer";
 import Questions from "./pages/Questions";
@@ -19,6 +25,14 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+function GlobalEffects() {
+  useActiveTimer(true);
+  const loc = useLocation();
+  const setLastVisitedRoute = useStudyStore((s) => s.setLastVisitedRoute);
+  useEffect(() => { setLastVisitedRoute(loc.pathname); }, [loc.pathname, setLastVisitedRoute]);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -27,6 +41,7 @@ const App = () => (
       <BrowserRouter>
         <div className="min-h-screen bg-background">
           <Navbar />
+          <GlobalEffects />
           <main>
             <Routes>
               <Route path="/" element={<Home />} />
@@ -43,6 +58,8 @@ const App = () => (
           </main>
           <FocusWidget />
           <OnboardingGate />
+          <ScratchpadPanel />
+          <HyperfocusBrake />
         </div>
       </BrowserRouter>
     </TooltipProvider>

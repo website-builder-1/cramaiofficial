@@ -22,6 +22,8 @@ import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
 import { VoiceInput } from '@/components/VoiceInput';
 import { Brain } from 'lucide-react';
+import { DriftToast } from '@/components/DriftToast';
+import { ReentryCard } from '@/components/ReentryCard';
 
 const quickActions = [
   { icon: Lightbulb, label: 'Explain this concept', action: 'explain' },
@@ -38,6 +40,10 @@ const suggestedQuestions = [
 
 export default function Chat() {
   const { chatHistory, addChatMessage, clearChatHistory, getStudyMaterial, subject, examLevel, examBoard, awardXp } = useStudyStore();
+  const setLastContext = useStudyStore((s) => s.setLastContext);
+  useEffect(() => {
+    setLastContext('/chat', { label: `AI Tutor: ${subject || 'study session'}` });
+  }, [setLastContext, subject]);
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
@@ -206,6 +212,8 @@ export default function Chat() {
   return (
     <div className="min-h-screen py-8">
       <div className="container px-4 max-w-3xl h-[calc(100vh-8rem)] flex flex-col">
+        <DriftToast />
+        <ReentryCard />
         {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border mb-4">
