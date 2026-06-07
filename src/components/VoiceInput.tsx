@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ensureMicPermission } from '@/lib/voice';
+import { toast } from 'sonner';
 
 interface Props {
   onTranscript: (text: string) => void;
@@ -18,13 +20,15 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
     if (SR) setSupported(true);
   }, []);
 
-  const toggle = () => {
+  const toggle = async () => {
     if (!supported) return;
     if (listening) {
       recRef.current?.stop();
       setListening(false);
       return;
     }
+    const ok = await ensureMicPermission();
+    if (!ok) { toast.error('Microphone access denied'); return; }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const r = new SR();
     r.lang = 'en-US';
@@ -35,10 +39,15 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
       onTranscript(text);
     };
     r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
+    r.onerror = (e: any) => {
+      setListening(false);
+      const code = e?.error || 'unknown';
+      if (code === 'not-allowed') toast.error('Microphone blocked. Allow mic access in browser settings.');
+      else if (code === 'no-speech') toast.error('No speech detected. Try again.');
+      else if (code !== 'aborted') toast.error(`Voice error: ${code}`);
+    };
     recRef.current = r;
-    r.start();
-    setListening(true);
+    try { r.start(); setListening(true); } catch (e: any) { toast.error(e?.message || 'Could not start mic'); }
   };
 
   if (!supported) return null;
