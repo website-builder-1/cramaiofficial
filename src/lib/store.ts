@@ -346,6 +346,8 @@ export const useStudyStore = create<StudyState>()(
         breakSec: 5 * 60,
         focusModeUI: false,
         sound: false,
+        volume: 0.35,
+        soundType: 'brown',
       },
       setFocus: (patch) => set((s) => ({ focus: { ...s.focus, ...patch } })),
 
