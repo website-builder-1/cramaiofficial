@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { explainBack } from '@/lib/api';
 import { useStudyStore } from '@/lib/store';
-import { createRecognizer, isSRSupported } from '@/lib/voice';
+import { createRecognizer, ensureMicPermission, isSRSupported } from '@/lib/voice';
 import { toast } from 'sonner';
 
 export function ExplainBackModal({ open, onClose, concept, context }: { open: boolean; onClose: () => void; concept: string; context: string; }) {
@@ -14,12 +14,18 @@ export function ExplainBackModal({ open, onClose, concept, context }: { open: bo
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ score: number; missing: string[]; goodPoints: string[]; oneLineFix: string } | null>(null);
   const awardXp = useStudyStore((s) => s.awardXp);
-  const toggleMic = () => {
+  const toggleMic = async () => {
     if (rec) { rec.stop(); setRec(null); return; }
     if (!isSRSupported()) { toast.error('Voice not supported'); return; }
-    const r = createRecognizer((t, isFinal) => { if (isFinal) setText((p) => (p ? p + ' ' : '') + t); });
-    r?.start(); if (r) r.onend = () => setRec(null);
-    setRec(r);
+    const ok = await ensureMicPermission();
+    if (!ok) { toast.error('Microphone access denied'); return; }
+    const r = createRecognizer(
+      (t, isFinal) => { if (isFinal) setText((p) => (p ? p + ' ' : '') + t); },
+      { onError: (m) => { toast.error(m); setRec(null); } },
+    );
+    if (!r) return;
+    r.onend = () => setRec(null);
+    try { r.start(); setRec(r); } catch (e: any) { toast.error(e?.message || 'Could not start mic'); }
   };
   const submit = async () => {
     if (text.trim().length < 10) { toast.error('Give a bit more explanation (10+ chars)'); return; }
