@@ -300,6 +300,10 @@ export async function quickRecap(content: string, focus?: string): Promise<ApiRe
   return apiRequest<{ bullets: string[] }>('/api/recap', { content, focus });
 }
 
+export async function suggestQuestions(content: string, count = 4): Promise<ApiResponse<{ questions: string[] }>> {
+  return apiRequest<{ questions: string[] }>('/api/suggest-questions', withGrounding({ content, count }));
+}
+
 // ---- New endpoints ----
 
 export async function explainBack(params: {
