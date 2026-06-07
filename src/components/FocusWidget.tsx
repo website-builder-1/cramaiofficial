@@ -52,7 +52,6 @@ export function FocusWidget() {
   // (independent of timer) so users can verify it works and use it ad-hoc.
   useEffect(() => {
     if (!focus.sound) return;
-    let stopped = false;
     try {
       const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       const ctx = new AC();
@@ -82,7 +81,6 @@ export function FocusWidget() {
         toast('Brown noise on 🎧', { duration: 1500 });
       }
       return () => {
-        stopped = true;
         try { node.stop(); } catch { /* noop */ }
         try { ctx.close(); } catch { /* noop */ }
         audioRef.current = null;
