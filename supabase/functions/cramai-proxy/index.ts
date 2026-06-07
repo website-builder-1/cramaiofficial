@@ -619,9 +619,6 @@ async function handleEndpoint(
       });
     }
 
-    default:
-      throw new Error(`Unknown endpoint: ${endpoint}`);
-
     case '/api/tts': {
       const text = asNonEmptyString(body.text) || '';
       if (!text) throw new Error('Missing text');
@@ -669,6 +666,9 @@ async function handleEndpoint(
         maxTokens: 4000,
       });
     }
+
+    default:
+      throw new Error(`Unknown endpoint: ${endpoint}`);
   }
 }
 
