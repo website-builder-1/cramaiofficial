@@ -2,6 +2,10 @@ function stripHtml(s: string) { return s.replace(/<[^>]+>/g, ' ').replace(/\s+/g
 
 export function isTTSSupported() { return typeof window !== 'undefined' && 'speechSynthesis' in window; }
 
+const isSafari = () =>
+  typeof navigator !== 'undefined' &&
+  /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(navigator.userAgent);
+
 // ---------- Voice selection: prefer modern "Natural / Neural" browser voices ----------
 // These voices are free, unlimited, and sound dramatically better than HuggingFace MMS-TTS.
 // Chrome ships "Google ..." voices, Edge ships Microsoft Online Natural neural voices,
@@ -10,7 +14,26 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
   if (!isTTSSupported()) return null;
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
-  const prefs: RegExp[] = [
+  // Safari/macOS/iOS — prioritise Apple's premium/enhanced voices first.
+  const applePrefs: RegExp[] = [
+    /Ava \(Premium\)/i,
+    /Ava \(Enhanced\)/i,
+    /^Ava$/i,
+    /Evan \(Premium\)/i,
+    /Evan \(Enhanced\)/i,
+    /Allison \(Premium\)/i,
+    /Allison \(Enhanced\)/i,
+    /Samantha \(Enhanced\)/i,
+    /^Samantha$/i,
+    /Serena \(Premium\)/i,
+    /Serena \(Enhanced\)/i,
+    /Karen \(Premium\)/i,
+    /Karen \(Enhanced\)/i,
+    /Daniel \(Enhanced\)/i,
+    /^Daniel$/i,
+    /Moira \(Enhanced\)/i,
+  ];
+  const otherPrefs: RegExp[] = [
     // Microsoft Edge neural "Online Natural" voices — by far the most human-sounding free option
     /Microsoft Ava Online \(Natural\)/i,
     /Microsoft Jenny Online \(Natural\)/i,
@@ -32,11 +55,15 @@ function pickBestVoice(): SpeechSynthesisVoice | null {
     /en-GB/i,
     /en-US/i,
   ];
+  const prefs = isSafari() ? [...applePrefs, ...otherPrefs] : otherPrefs;
   for (const re of prefs) {
     const v = voices.find((x) => re.test(x.name) || re.test(`${x.name} ${x.lang}`));
     if (v) return v;
   }
-  return voices.find((v) => /^en/i.test(v.lang)) || voices[0];
+  // Avoid the awful default "Fred"/"Albert"/"Bad News" on Safari.
+  const badSafari = /(Fred|Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Pipe Organ|Trinoids|Whisper|Wobble|Zarvox|Jester|Junior|Kathy|Princess|Ralph|Vicki|Victoria|Reed|Rocko|Sandy|Shelley|Grandma|Grandpa|Eddy|Flo)/i;
+  const enVoices = voices.filter((v) => /^en/i.test(v.lang) && !badSafari.test(v.name));
+  return enVoices[0] || voices.find((v) => /^en/i.test(v.lang)) || voices[0];
 }
 
 let speakingFlag = false;
@@ -94,24 +121,47 @@ function speakChunk(text: string, voice: SpeechSynthesisVoice | null): Promise<v
   });
 }
 
-/** Speak text using the best natural browser voice available. */
+/**
+ * Speak text using the best natural browser voice available.
+ * IMPORTANT: must be called from a user-gesture handler (e.g. click). Safari
+ * silently falls back to the default voice if the FIRST `speak()` call happens
+ * outside the gesture. We therefore queue the first chunk synchronously and
+ * only do async voice loading on subsequent chunks.
+ */
 export function speak(text: string, opts?: { onEnd?: () => void }) {
   stopSpeaking();
   cancelled = false;
   const clean = stripHtml(text);
   if (!clean) { opts?.onEnd?.(); return; }
+  if (!isTTSSupported()) { opts?.onEnd?.(); return; }
   speakingFlag = true;
-  (async () => {
-    await ensureVoicesLoaded();
-    const voice = pickBestVoice();
-    const chunks = splitForSpeech(clean);
+
+  const chunks = splitForSpeech(clean);
+  // Pick a voice synchronously if voices are already loaded (Safari usually is).
+  let voice = pickBestVoice();
+  // Kick off the first chunk synchronously so we keep the user-gesture context.
+  const firstChunk = chunks.shift() || '';
+  const firstUtter = new SpeechSynthesisUtterance(firstChunk);
+  if (voice) { firstUtter.voice = voice; firstUtter.lang = voice.lang; }
+  firstUtter.rate = 1.0;
+  firstUtter.pitch = 1.05;
+  firstUtter.volume = 1;
+  firstUtter.onend = () => { void runRest(); };
+  firstUtter.onerror = () => { void runRest(); };
+  window.speechSynthesis.speak(firstUtter);
+
+  const runRest = async () => {
+    if (!voice) {
+      await ensureVoicesLoaded();
+      voice = pickBestVoice();
+    }
     for (const c of chunks) {
       if (cancelled) break;
       await speakChunk(c, voice);
     }
     speakingFlag = false;
     opts?.onEnd?.();
-  })();
+  };
 }
 
 export async function downloadTtsAudio(text: string, filename = 'cramai-notes.txt') {
