@@ -353,3 +353,15 @@ export async function hallucinationCheck(params: {
 }): Promise<ApiResponse<{ flaggedClaims: HallucinationFlag[] }>> {
   return apiRequest('/api/hallucination-check', params);
 }
+
+// AI voice synthesis (HuggingFace MMS-TTS via proxy)
+export async function ttsAudio(text: string): Promise<ApiResponse<{ audio: string; mime: string }>> {
+  return apiRequest('/api/tts', { text });
+}
+
+export async function notesSpokenScript(
+  notes: unknown,
+  subject?: string,
+): Promise<ApiResponse<{ script: string }>> {
+  return apiRequest('/api/notes/spoken-script', { notes, subject });
+}
