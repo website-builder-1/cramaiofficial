@@ -4,6 +4,7 @@ import { Timer, Play, Pause, X, Volume2, VolumeX, Focus, Settings2 } from 'lucid
 import { useStudyStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Slider } from '@/components/ui/slider';
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -17,6 +18,7 @@ export function FocusWidget() {
   const [now, setNow] = useState(Date.now());
   const [showSettings, setShowSettings] = useState(false);
   const audioRef = useRef<{ ctx: AudioContext; node: AudioBufferSourceNode } | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
 
   // Tick
   useEffect(() => {
@@ -48,48 +50,83 @@ export function FocusWidget() {
     else document.body.classList.remove('focus-mode');
   }, [focus.focusModeUI]);
 
-  // Brown noise via WebAudio. Plays whenever the sound toggle is on
-  // (independent of timer) so users can verify it works and use it ad-hoc.
+  // Ambient noise via WebAudio. Plays whenever the sound toggle is on
+  // (independent of timer). Rebuilds when the sound type changes.
   useEffect(() => {
     if (!focus.sound) return;
     try {
       const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
       const ctx = new AC();
-      // Chrome/Safari start the context suspended until a user gesture.
-      // The toggle click IS a user gesture, so resume() should succeed.
       ctx.resume().catch(() => { /* noop */ });
-      const bufferSize = 2 * ctx.sampleRate;
+      const bufferSize = 4 * ctx.sampleRate;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
-      let lastOut = 0;
-      for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2 - 1;
-        // Standard brown-noise IIR + post-gain compensation.
-        data[i] = (lastOut + 0.02 * white) / 1.02;
-        lastOut = data[i];
-        data[i] *= 3.5;
+      if (focus.soundType === 'white') {
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+      } else if (focus.soundType === 'pink') {
+        // Paul Kellet pink noise approximation
+        let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886*b0 + white*0.0555179;
+          b1 = 0.99332*b1 + white*0.0750759;
+          b2 = 0.96900*b2 + white*0.1538520;
+          b3 = 0.86650*b3 + white*0.3104856;
+          b4 = 0.55000*b4 + white*0.5329522;
+          b5 = -0.7616*b5 - white*0.0168980;
+          data[i] = (b0+b1+b2+b3+b4+b5+b6+white*0.5362) * 0.18;
+          b6 = white*0.115926;
+        }
+      } else if (focus.soundType === 'rain') {
+        // Brown noise base + sparse high-frequency droplets
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          lastOut = (lastOut + 0.02 * white) / 1.02;
+          let sample = lastOut * 3.0;
+          if (Math.random() < 0.0008) sample += (Math.random() * 2 - 1) * 0.6;
+          data[i] = sample;
+        }
+      } else {
+        // brown
+        let lastOut = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          data[i] = (lastOut + 0.02 * white) / 1.02;
+          lastOut = data[i];
+          data[i] *= 3.5;
+        }
       }
       const node = ctx.createBufferSource();
       node.buffer = buffer;
       node.loop = true;
       const gain = ctx.createGain();
-      gain.gain.value = 0.35; // audible default
+      gain.gain.value = focus.volume;
       node.connect(gain).connect(ctx.destination);
       node.start();
       audioRef.current = { ctx, node };
+      gainRef.current = gain;
       if (!focus.active) {
-        toast('Brown noise on 🎧', { duration: 1500 });
+        toast(`${focus.soundType[0].toUpperCase()+focus.soundType.slice(1)} noise on 🎧`, { duration: 1500 });
       }
       return () => {
         try { node.stop(); } catch { /* noop */ }
         try { ctx.close(); } catch { /* noop */ }
         audioRef.current = null;
+        gainRef.current = null;
       };
     } catch (e) {
       console.error('Audio init failed', e);
-      toast.error('Could not start brown noise on this browser.');
+      toast.error('Could not start ambient noise on this browser.');
     }
-  }, [focus.sound]);
+  }, [focus.sound, focus.soundType]);
+
+  // Live volume updates without restarting the buffer
+  useEffect(() => {
+    if (gainRef.current) {
+      gainRef.current.gain.value = focus.volume;
+    }
+  }, [focus.volume]);
 
   // Hyperfocus nudge
   const [sessionStart] = useState(Date.now());
