@@ -246,6 +246,34 @@ export function FocusWidget() {
                   </button>
                 ))}
               </div>
+              <p className="text-xs font-medium text-muted-foreground pt-1">Ambient sound</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(['brown','pink','white','rain'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setFocus({ soundType: t })}
+                    className={cn(
+                      'text-[11px] py-1.5 rounded border capitalize',
+                      focus.soundType === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <VolumeX className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <Slider
+                  value={[Math.round(focus.volume * 100)]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={([v]) => setFocus({ volume: v / 100 })}
+                  className="flex-1"
+                />
+                <Volume2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                <span className="text-[11px] font-mono w-8 text-right">{Math.round(focus.volume * 100)}</span>
+              </div>
             </div>
           )}
         </div>
