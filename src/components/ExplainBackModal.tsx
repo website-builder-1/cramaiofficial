@@ -5,20 +5,30 @@ import { Button } from '@/components/ui/button';
 import { Mic, MicOff, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
 import { explainBack } from '@/lib/api';
 import { useStudyStore } from '@/lib/store';
-import { createRecognizer, ensureMicPermission, isSRSupported } from '@/lib/voice';
+import { createRecognizer, isRecorderSupported, isSRSupported, isVoiceSupported, startTranscriptionRecorder, type VoiceController } from '@/lib/voice';
 import { toast } from 'sonner';
 
 export function ExplainBackModal({ open, onClose, concept, context }: { open: boolean; onClose: () => void; concept: string; context: string; }) {
   const [text, setText] = useState('');
-  const [rec, setRec] = useState<any>(null);
+  const [rec, setRec] = useState<VoiceController | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ score: number; missing: string[]; goodPoints: string[]; oneLineFix: string } | null>(null);
   const awardXp = useStudyStore((s) => s.awardXp);
   const toggleMic = async () => {
     if (rec) { rec.stop(); setRec(null); return; }
-    if (!isSRSupported()) { toast.error('Voice not supported'); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) { toast.error('Microphone access denied'); return; }
+    if (!isVoiceSupported()) { toast.error('Voice not supported'); return; }
+    if (isRecorderSupported()) {
+      const recorder = await startTranscriptionRecorder(
+        (t) => setText((p) => (p ? p + ' ' : '') + t),
+        {
+          onError: toast.error,
+          onStatus: (status) => { setVoiceBusy(status === 'transcribing'); if (status === 'idle') setRec(null); },
+        },
+      );
+      setRec(recorder);
+      return;
+    }
     const r = createRecognizer(
       (t, isFinal) => { if (isFinal) setText((p) => (p ? p + ' ' : '') + t); },
       { onError: (m) => { toast.error(m); setRec(null); } },
@@ -48,9 +58,9 @@ export function ExplainBackModal({ open, onClose, concept, context }: { open: bo
           <>
             <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type or speak your explanation…" className="min-h-[160px]" />
             <div className="flex justify-between items-center gap-2">
-              {isSRSupported() && (
-                <Button onClick={toggleMic} variant={rec ? 'default' : 'outline'} size="sm" className="gap-1.5">
-                  {rec ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}{rec ? 'Stop' : 'Speak'}
+              {isVoiceSupported() && (
+                <Button onClick={toggleMic} variant={rec ? 'default' : 'outline'} size="sm" className="gap-1.5" disabled={voiceBusy}>
+                  {rec ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}{voiceBusy ? 'Transcribing…' : rec ? 'Stop' : 'Speak'}
                 </Button>
               )}
               <Button onClick={submit} variant="hero" disabled={loading} className="gap-1.5">
