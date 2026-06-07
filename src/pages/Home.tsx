@@ -23,64 +23,64 @@ import { JustStartButton } from '@/components/JustStartButton';
 const features = [
   {
     icon: Upload,
-    title: 'Smart Document Analysis',
-    description: 'Upload any study material and get instant insights, key topics, and study recommendations.',
+    title: 'Drop-and-go Analyzer',
+    description: 'Dump messy notes, slides, or a textbook page. We chunk it into ADHD-sized pieces you can actually start.',
   },
   {
     icon: BookOpen,
-    title: 'AI Practice Questions',
-    description: 'Generate unlimited practice questions tailored to your material and difficulty level.',
+    title: 'Dopamine Practice Questions',
+    description: 'Short bursts, instant feedback, zero shame. Built for brains that need the hit of getting one right.',
   },
   {
     icon: Calendar,
-    title: 'Personalized Study Plans',
-    description: 'Get hour-by-hour schedules optimized for your exam date and learning style.',
+    title: 'Tiny-Step Study Plans',
+    description: 'No 4-hour blocks. Just the next 15-minute task so executive function never has to negotiate.',
   },
   {
     icon: MessageCircle,
-    title: 'AI Tutor Chat',
-    description: 'Ask questions, get explanations, and receive step-by-step solutions instantly.',
+    title: 'Patient AI Tutor',
+    description: 'Ask the dumb question. Ask it again. No sighs, no judgement — just clear, calm answers on demand.',
   },
   {
     icon: Layers,
-    title: 'Smart Flashcards',
-    description: 'AI-generated flashcards with flip-to-reveal answers and quick spaced review.',
+    title: 'Flick-Through Flashcards',
+    description: 'Quick flips, satisfying streaks. The kind of micro-reward loop ADHD brains actually stick with.',
   },
   {
     icon: ScrollText,
-    title: 'Summary & Cheat Sheet',
-    description: 'One-click TL;DR, bullet summary, and exam-ready cheat sheet from your notes.',
+    title: 'TL;DR Cheat Sheet',
+    description: 'For the day before the exam when 40 pages feels impossible. One tap, one page, done.',
   },
 ];
 
 const stats = [
-  { icon: Users, value: '10,000+', label: 'Students Helped' },
-  { icon: TrendingUp, value: '95%', label: 'Pass Rate Boost' },
-  { icon: Clock, value: '50%', label: 'Study Time Saved' },
+  { icon: Users, value: '10,000+', label: 'ADHD Students' },
+  { icon: TrendingUp, value: '95%', label: 'Actually Finish a Session' },
+  { icon: Clock, value: '50%', label: 'Less Time Staring at Page 1' },
 ];
 
 const testimonials = [
   {
-    quote: "CramAI helped me pass my biology final with an A when I had only 2 days to study!",
+    quote: "First study app that didn't make me feel broken for having ADHD. The tiny-step plans are everything.",
     author: "Sarah M.",
-    role: "Biology Major",
+    role: "Biology Major, diagnosed ADHD-C",
   },
   {
-    quote: "The AI tutor explained calculus concepts better than my textbook ever did.",
+    quote: "I opened a textbook for the first time in weeks because the next task was just 'read one paragraph'.",
     author: "James K.",
     role: "Engineering Student",
   },
   {
-    quote: "The practice questions were exactly like my actual exam. Game changer!",
+    quote: "The dopamine-friendly questions kept me hooked. I studied for 2 hours and didn't even notice.",
     author: "Emily R.",
     role: "Pre-Med Student",
   },
 ];
 
 const quotes = [
-  "Success is no accident. It is hard work, perseverance, learning, studying, and sacrifice.",
-  "The beautiful thing about learning is that no one can take it away from you.",
-  "Education is the passport to the future, for tomorrow belongs to those who prepare for it today.",
+  "ADHD isn't a deficit of attention. It's attention that needs the right invitation.",
+  "You don't have a discipline problem. You have a dopamine problem — and we built a tool for that.",
+  "Start ugly. Start tiny. Just start. Hyperfocus does the rest.",
 ];
 
 export default function Home() {
@@ -109,41 +109,40 @@ export default function Home() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent border border-border animate-fade-in">
               <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium text-accent-foreground">AI-Powered Exam Prep</span>
+              <span className="text-sm font-medium text-accent-foreground">Study tools built for ADHD brains</span>
             </div>
 
             {/* Headline */}
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight animate-slide-up">
-              Ace Your Exam in{' '}
-              <span className="gradient-text">24 Hours</span>
-              {' '}with AI
+              Cram smarter.{' '}
+              <span className="gradient-text">Built for ADHD brains.</span>
             </h1>
 
             {/* Subheadline */}
             <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto animate-slide-up" style={{ animationDelay: '0.1s' }}>
-              Upload your study materials and let our AI create personalized practice questions, 
-              study plans, and explanations. Study smarter, not harder.
+              The study app that meets your brain where it is. Tiny tasks, instant dopamine, zero shame —
+              powered by AI that knows the hardest part is just opening the book.
             </p>
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-slide-up" style={{ animationDelay: '0.2s' }}>
               <Link to="/analyzer">
                 <Button variant="hero" size="xl" className="gap-2 w-full sm:w-auto">
-                  Start Studying Now
+                  Start a 15-min sprint
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
               <Link to="/notes">
                 <Button variant="outline" size="xl" className="gap-2 w-full sm:w-auto">
                   <Zap className="w-5 h-5" />
-                  Generate Study Notes
+                  Make my notes readable
                 </Button>
               </Link>
             </div>
 
             {/* ADHD-friendly: Just Start */}
             <div className="pt-4 animate-slide-up" style={{ animationDelay: '0.25s' }}>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Can't get started? Let the AI pick one tiny task</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground mb-3">Stuck staring at the page? Tap one button. We'll pick the task.</p>
               <div className="flex justify-center">
                 <JustStartButton variant="outline" size="lg" />
               </div>
@@ -175,10 +174,10 @@ export default function Home() {
         <div className="container px-4">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Everything You Need to <span className="gradient-text">Succeed</span>
+              Designed around the way <span className="gradient-text">ADHD brains actually work</span>
             </h2>
             <p className="text-muted-foreground text-lg">
-              Our AI-powered tools work together to give you the ultimate study experience.
+              Every feature is engineered to lower the activation cost — so the gap between "I should study" and "I am studying" finally closes.
             </p>
           </div>
 
@@ -208,15 +207,15 @@ export default function Home() {
         <div className="container px-4">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Start Studying in <span className="gradient-text">3 Steps</span>
+              From zero to in-flow in <span className="gradient-text">3 steps</span>
             </h2>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             {[
-              { step: 1, title: 'Upload Material', desc: 'Upload your notes, textbook pages, or paste text directly.' },
-              { step: 2, title: 'AI Analyzes', desc: 'Our AI identifies key topics, concepts, and creates a study roadmap.' },
-              { step: 3, title: 'Study Smart', desc: 'Practice with AI questions, get tutoring help, and track progress.' },
+              { step: 1, title: 'Drop the chaos in', desc: 'Photos, PDFs, screenshots, voice notes — we don\'t care how messy. We sort it.' },
+              { step: 2, title: 'AI breaks it down', desc: 'Big scary topic becomes a stack of bite-sized tasks your brain will actually start.' },
+              { step: 3, title: 'Ride the hyperfocus', desc: 'Streaks, timers, tiny wins. Look up and an hour has gone — in the good way.' },
             ].map((item, index) => (
               <div key={index} className="relative text-center animate-slide-up" style={{ animationDelay: `${index * 0.15}s` }}>
                 <div className="w-16 h-16 rounded-full gradient-bg flex items-center justify-center mx-auto mb-4 shadow-glow text-2xl font-bold text-primary-foreground">
@@ -238,7 +237,7 @@ export default function Home() {
         <div className="container px-4">
           <div className="text-center max-w-2xl mx-auto mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              Loved by <span className="gradient-text">Students</span>
+              Loved by <span className="gradient-text">ADHD students</span> who tried everything else
             </h2>
           </div>
 
@@ -289,14 +288,14 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-glow" />
             <div className="relative z-10">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                Ready to <span className="gradient-text">Ace Your Exam</span>?
+                Your brain isn't broken. <span className="gradient-text">Your tools were.</span>
               </h2>
               <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
-                Join thousands of students who've transformed their study habits with CramAI.
+                Join thousands of ADHD students who finally found a study app that works *with* their wiring instead of against it.
               </p>
               <Link to="/analyzer">
                 <Button variant="hero" size="xl" className="gap-2">
-                  Get Started Free
+                  Start free — no overwhelm
                   <ArrowRight className="w-5 h-5" />
                 </Button>
               </Link>
