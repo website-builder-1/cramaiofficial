@@ -212,6 +212,13 @@ function truncate(s: unknown, n = 8000): string {
   return str.length > n ? str.slice(0, n) + '\n...[truncated]' : str;
 }
 
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64.includes(',') ? b64.split(',').pop() || '' : b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
 function contextBlock(body: Record<string, unknown>): string {
   const subject = asNonEmptyString(body.subject);
   const examLevel = asNonEmptyString(body.examLevel);
@@ -651,6 +658,42 @@ async function handleEndpoint(
         }
       }
       throw new Error(`TTS failed: ${lastErr}`);
+    }
+
+    case '/api/stt': {
+      const audio = asNonEmptyString(body.audio) || '';
+      const mime = asNonEmptyString(body.mime) || 'audio/webm';
+      if (!audio) throw new Error('Missing audio');
+      const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
+      if (!hfKey) throw new Error('Speech transcription not configured');
+      const bytes = base64ToBytes(audio);
+      const sttHosts = [
+        'https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo',
+        'https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo',
+      ];
+      let lastErr = '';
+      for (const url of sttHosts) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${hfKey}`,
+              'Content-Type': mime,
+              Accept: 'application/json',
+            },
+            body: bytes,
+          });
+          const raw = await res.text();
+          if (!res.ok) { lastErr = `${res.status} ${raw.slice(0, 200)}`; continue; }
+          const parsed = extractJSON(raw);
+          const text = asNonEmptyString(parsed.text) || asNonEmptyString(parsed.transcription) || '';
+          if (text) return { text };
+          lastErr = `empty transcription: ${raw.slice(0, 200)}`;
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : String(e);
+        }
+      }
+      throw new Error(`Speech transcription failed: ${lastErr}`);
     }
 
     case '/api/notes/spoken-script': {

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ensureMicPermission } from '@/lib/voice';
+import { createRecognizer, isRecorderSupported, isSRSupported, isVoiceSupported, startTranscriptionRecorder, type VoiceController } from '@/lib/voice';
 import { toast } from 'sonner';
 
 interface Props {
@@ -11,46 +11,43 @@ interface Props {
 }
 
 export function VoiceInput({ onTranscript, disabled }: Props) {
-  const [listening, setListening] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [supported, setSupported] = useState(false);
-  const recRef = useRef<any>(null);
+  const recRef = useRef<VoiceController | null>(null);
 
   useEffect(() => {
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SR) setSupported(true);
+    setSupported(isVoiceSupported());
   }, []);
 
   const toggle = async () => {
     if (!supported) return;
-    if (listening) {
+    if (status === 'recording') {
       recRef.current?.stop();
-      setListening(false);
       return;
     }
-    const ok = await ensureMicPermission();
-    if (!ok) { toast.error('Microphone access denied'); return; }
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const r = new SR();
-    r.lang = 'en-US';
-    r.interimResults = false;
-    r.maxAlternatives = 1;
-    r.onresult = (e: any) => {
-      const text = Array.from(e.results).map((r: any) => r[0].transcript).join(' ');
-      onTranscript(text);
-    };
-    r.onend = () => setListening(false);
-    r.onerror = (e: any) => {
-      setListening(false);
-      const code = e?.error || 'unknown';
-      if (code === 'not-allowed') toast.error('Microphone blocked. Allow mic access in browser settings.');
-      else if (code === 'no-speech') toast.error('No speech detected. Try again.');
-      else if (code !== 'aborted') toast.error(`Voice error: ${code}`);
-    };
-    recRef.current = r;
-    try { r.start(); setListening(true); } catch (e: any) { toast.error(e?.message || 'Could not start mic'); }
+    if (status === 'transcribing') return;
+    if (isRecorderSupported()) {
+      const recorder = await startTranscriptionRecorder(
+        (text) => onTranscript(text),
+        { onError: toast.error, onStatus: setStatus },
+      );
+      recRef.current = recorder;
+      return;
+    }
+    if (!isSRSupported()) { toast.error('Voice not supported in this browser'); return; }
+    const recognizer = createRecognizer(
+      (text, isFinal) => { if (isFinal) onTranscript(text); },
+      { continuous: false, onError: (msg) => { toast.error(msg); setStatus('idle'); } },
+    );
+    if (!recognizer) return;
+    recognizer.onend = () => setStatus('idle');
+    recRef.current = recognizer;
+    try { recognizer.start(); setStatus('recording'); } catch (e: any) { toast.error(e?.message || 'Could not start mic'); setStatus('idle'); }
   };
 
   if (!supported) return null;
+
+  const listening = status === 'recording';
 
   return (
     <Button
@@ -58,8 +55,8 @@ export function VoiceInput({ onTranscript, disabled }: Props) {
       variant={listening ? 'default' : 'outline'}
       size="icon"
       onClick={toggle}
-      disabled={disabled}
-      title={listening ? 'Stop listening' : 'Dictate your question'}
+      disabled={disabled || status === 'transcribing'}
+      title={status === 'transcribing' ? 'Transcribing…' : listening ? 'Stop and transcribe' : 'Dictate your question'}
       className={cn(listening && 'animate-pulse')}
     >
       {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

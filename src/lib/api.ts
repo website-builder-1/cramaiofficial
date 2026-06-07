@@ -359,9 +359,41 @@ export async function ttsAudio(text: string): Promise<ApiResponse<{ audio: strin
   return apiRequest('/api/tts', { text });
 }
 
+export async function transcribeAudio(audio: string, mime: string): Promise<ApiResponse<{ text: string }>> {
+  return apiRequest('/api/stt', { audio, mime });
+}
+
+function stripHtmlText(value: unknown): string {
+  return String(value ?? '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function localNotesScript(notes: unknown, subject?: string): string {
+  const n = notes as NotesResult | null;
+  if (!n || typeof n !== 'object') return stripHtmlText(notes);
+  const parts: string[] = [];
+  parts.push(`Let's go through these ${subject ? `${subject} ` : ''}notes together.`);
+  if (n.title) parts.push(`The topic is ${stripHtmlText(n.title)}.`);
+  if (n.overview) parts.push(`First, the context: ${stripHtmlText(n.overview)}`);
+  n.sections?.forEach((section) => {
+    parts.push(`Now, ${stripHtmlText(section.heading)}.`);
+    if (section.body) parts.push(stripHtmlText(section.body));
+    section.bullets?.forEach((bullet) => parts.push(`This means: ${stripHtmlText(bullet)}`));
+    section.examples?.forEach((example) => parts.push(`For example, ${stripHtmlText(example)}`));
+  });
+  if (n.keyTakeaways?.length) {
+    parts.push('The key things to remember are:');
+    n.keyTakeaways.forEach((takeaway) => parts.push(stripHtmlText(takeaway)));
+  }
+  return parts.filter(Boolean).join(' ');
+}
+
 export async function notesSpokenScript(
   notes: unknown,
   subject?: string,
 ): Promise<ApiResponse<{ script: string }>> {
-  return apiRequest('/api/notes/spoken-script', { notes, subject });
+  const res = await apiRequest<{ script: string }>('/api/notes/spoken-script', { notes, subject });
+  if (res.error?.includes('Unknown endpoint')) {
+    return { data: { script: localNotesScript(notes, subject) } };
+  }
+  return res;
 }
