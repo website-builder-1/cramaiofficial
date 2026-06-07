@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { Brain, Mic, X } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { createRecognizer, ensureMicPermission, isSRSupported } from '@/lib/voice';
+import { createRecognizer, isRecorderSupported, isSRSupported, isVoiceSupported, startTranscriptionRecorder, type VoiceController } from '@/lib/voice';
 import { toast } from 'sonner';
 
 export function ScratchpadPanel() {
@@ -13,14 +13,24 @@ export function ScratchpadPanel() {
   const scratchpads = useStudyStore((s) => s.scratchpads);
   const setScratchpad = useStudyStore((s) => s.setScratchpad);
   const [open, setOpen] = useState(false);
-  const [recRef, setRecRef] = useState<any>(null);
+  const [recRef, setRecRef] = useState<VoiceController | null>(null);
+  const [voiceBusy, setVoiceBusy] = useState(false);
   const text = scratchpads[loc.pathname] || '';
   if (!on) return null;
   const toggleMic = async () => {
     if (recRef) { recRef.stop(); setRecRef(null); return; }
-    if (!isSRSupported()) { toast.error('Voice not supported in this browser'); return; }
-    const ok = await ensureMicPermission();
-    if (!ok) { toast.error('Microphone access denied'); return; }
+    if (!isVoiceSupported()) { toast.error('Voice not supported in this browser'); return; }
+    if (isRecorderSupported()) {
+      const recorder = await startTranscriptionRecorder(
+        (t) => setScratchpad(loc.pathname, (text ? text + ' ' : '') + t),
+        {
+          onError: toast.error,
+          onStatus: (status) => { setVoiceBusy(status === 'transcribing'); if (status === 'idle') setRecRef(null); },
+        },
+      );
+      setRecRef(recorder);
+      return;
+    }
     const r = createRecognizer(
       (t, isFinal) => { if (isFinal) setScratchpad(loc.pathname, (text ? text + ' ' : '') + t); },
       { onError: (m) => { toast.error(m); setRecRef(null); } },
@@ -45,9 +55,9 @@ export function ScratchpadPanel() {
           <Textarea value={text} onChange={(e) => setScratchpad(loc.pathname, e.target.value)} placeholder="Park stray thoughts here so they don't steal focus…" className="min-h-[160px] resize-none text-sm" />
           <div className="flex justify-between items-center">
             <span className="text-[10px] text-muted-foreground">Saved per page</span>
-            {isSRSupported() && (
-              <Button size="sm" variant={recRef ? 'default' : 'outline'} onClick={toggleMic} className="gap-1.5 h-7">
-                <Mic className="w-3.5 h-3.5" /> {recRef ? 'Listening…' : 'Voice'}
+            {isVoiceSupported() && (
+              <Button size="sm" variant={recRef ? 'default' : 'outline'} onClick={toggleMic} className="gap-1.5 h-7" disabled={voiceBusy}>
+                <Mic className="w-3.5 h-3.5" /> {voiceBusy ? 'Transcribing…' : recRef ? 'Stop' : 'Voice'}
               </Button>
             )}
           </div>
