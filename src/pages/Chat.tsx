@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep, quickRecap } from '@/lib/api';
+import { type ChatMessage, sendChatMessage, explainConcept, getHint, solveStepByStep, quickRecap, suggestQuestions } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RichText } from '@/components/RichText';
@@ -31,7 +31,7 @@ const quickActions = [
   { icon: Calculator, label: 'Solve step-by-step', action: 'solve' },
 ];
 
-const suggestedQuestions = [
+const fallbackSuggestions = [
   "What's the difference between mitosis and meiosis?",
   "Explain photosynthesis in simple terms",
   "How does DNA replication work?",
@@ -48,9 +48,30 @@ export default function Chat() {
   const [isLoading, setIsLoading] = useState(false);
   const [images, setImages] = useState<{ dataUrl: string; name: string }[]>([]);
   const [diagramFor, setDiagramFor] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>(fallbackSuggestions);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic suggestion generation based on Analyzer material
+  const loadSuggestions = async () => {
+    const material = getStudyMaterial();
+    setLoadingSuggestions(true);
+    const res = await suggestQuestions(material || '', 4);
+    setLoadingSuggestions(false);
+    if (res.data?.questions?.length) {
+      // Shuffle for variety on every refresh
+      const shuffled = [...res.data.questions].sort(() => Math.random() - 0.5);
+      setSuggestions(shuffled.slice(0, 4));
+    }
+  };
+
+  useEffect(() => {
+    // Regenerate when material/subject changes
+    loadSuggestions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subject, examLevel, examBoard]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -271,8 +292,17 @@ export default function Chat() {
                   Ask me anything about your study material!
                 </p>
                 <div className="space-y-2 w-full max-w-md">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Try asking:</p>
-                  {suggestedQuestions.map((question, i) => (
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide">Try asking:</p>
+                    <button
+                      onClick={loadSuggestions}
+                      disabled={loadingSuggestions}
+                      className="text-xs text-primary hover:underline disabled:opacity-50"
+                    >
+                      {loadingSuggestions ? 'Generating…' : 'Shuffle'}
+                    </button>
+                  </div>
+                  {suggestions.map((question, i) => (
                     <button
                       key={i}
                       onClick={() => handleSend(question)}
