@@ -45,6 +45,8 @@ export interface FocusSessionState {
   breakSec: number;
   focusModeUI: boolean; // dim UI
   sound: boolean;
+  volume: number; // 0..1
+  soundType: 'brown' | 'pink' | 'white' | 'rain';
 }
 
 export type ChunkStyle = 'tiny' | 'standard' | 'deep';
