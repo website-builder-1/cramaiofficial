@@ -45,6 +45,8 @@ export interface FocusSessionState {
   breakSec: number;
   focusModeUI: boolean; // dim UI
   sound: boolean;
+  volume: number; // 0..1
+  soundType: 'brown' | 'pink' | 'white' | 'rain';
 }
 
 export type ChunkStyle = 'tiny' | 'standard' | 'deep';
@@ -344,6 +346,8 @@ export const useStudyStore = create<StudyState>()(
         breakSec: 5 * 60,
         focusModeUI: false,
         sound: false,
+        volume: 0.35,
+        soundType: 'brown',
       },
       setFocus: (patch) => set((s) => ({ focus: { ...s.focus, ...patch } })),
 
