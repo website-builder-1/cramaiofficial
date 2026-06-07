@@ -279,7 +279,7 @@ export function FocusWidget() {
                     onClick={() => setFocus({ soundType: t })}
                     className={cn(
                       'text-[11px] py-1.5 rounded border capitalize',
-                      focus.soundType === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
+                      soundType === t ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
                     )}
                   >
                     {t}
@@ -289,7 +289,7 @@ export function FocusWidget() {
               <div className="flex items-center gap-2 pt-1">
                 <VolumeX className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                 <Slider
-                  value={[Math.round(focus.volume * 100)]}
+                  value={[Math.round(volume * 100)]}
                   min={0}
                   max={100}
                   step={1}
@@ -297,7 +297,7 @@ export function FocusWidget() {
                   className="flex-1"
                 />
                 <Volume2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="text-[11px] font-mono w-8 text-right">{Math.round(focus.volume * 100)}</span>
+                <span className="text-[11px] font-mono w-8 text-right">{Math.round(volume * 100)}</span>
               </div>
             </div>
           )}
