@@ -471,6 +471,22 @@ export const useStudyStore = create<StudyState>()(
         scratchpads: s.scratchpads,
         recentStudyDays: s.recentStudyDays,
         lastVisitedRoute: s.lastVisitedRoute,
+        // Persist current study material + generated content so it survives
+        // navigation, refresh, and tab reopens. Cleared only when the user
+        // analyzes new material (resetGeneratedContent / resetAll).
+        documentContent: s.documentContent,
+        analysisResult: s.analysisResult,
+        syllabusContext: s.syllabusContext,
+        pastPaperContext: s.pastPaperContext,
+        notesData: s.notesData,
+        summaryData: s.summaryData,
+        flashcardsState: s.flashcardsState,
+        questionsState: s.questionsState,
+        questions: s.questions,
+        studyPlan: s.studyPlan,
+        weakTopics: s.weakTopics,
+        chatHistory: s.chatHistory,
+        lastContexts: s.lastContexts,
       }),
     }
   )
