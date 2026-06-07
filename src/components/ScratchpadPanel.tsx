@@ -4,7 +4,8 @@ import { useLocation } from 'react-router-dom';
 import { Brain, Mic, X } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { createRecognizer, isSRSupported } from '@/lib/voice';
+import { createRecognizer, ensureMicPermission, isSRSupported } from '@/lib/voice';
+import { toast } from 'sonner';
 
 export function ScratchpadPanel() {
   const on = useStudyStore((s) => s.adhdProfile.scratchpadOn);
@@ -15,12 +16,18 @@ export function ScratchpadPanel() {
   const [recRef, setRecRef] = useState<any>(null);
   const text = scratchpads[loc.pathname] || '';
   if (!on) return null;
-  const toggleMic = () => {
+  const toggleMic = async () => {
     if (recRef) { recRef.stop(); setRecRef(null); return; }
-    if (!isSRSupported()) return;
-    const r = createRecognizer((t, isFinal) => { if (isFinal) setScratchpad(loc.pathname, (text ? text + ' ' : '') + t); });
-    r?.start(); if (r) r.onend = () => setRecRef(null);
-    setRecRef(r);
+    if (!isSRSupported()) { toast.error('Voice not supported in this browser'); return; }
+    const ok = await ensureMicPermission();
+    if (!ok) { toast.error('Microphone access denied'); return; }
+    const r = createRecognizer(
+      (t, isFinal) => { if (isFinal) setScratchpad(loc.pathname, (text ? text + ' ' : '') + t); },
+      { onError: (m) => { toast.error(m); setRecRef(null); } },
+    );
+    if (!r) return;
+    r.onend = () => setRecRef(null);
+    try { r.start(); setRecRef(r); } catch (e: any) { toast.error(e?.message || 'Could not start mic'); }
   };
   return (
     <>

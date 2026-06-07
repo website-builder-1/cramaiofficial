@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -618,10 +619,59 @@ async function handleEndpoint(
       });
     }
 
+    case '/api/tts': {
+      const text = asNonEmptyString(body.text) || '';
+      if (!text) throw new Error('Missing text');
+      const hfKey = Deno.env.get('HUGGINGFACE_API_KEY');
+      if (!hfKey) throw new Error('Voice synthesis not configured');
+      const clean = text.replace(/\s+/g, ' ').trim().slice(0, 600);
+      const ttsHosts = [
+        'https://router.huggingface.co/hf-inference/models/facebook/mms-tts-eng',
+        'https://api-inference.huggingface.co/models/facebook/mms-tts-eng',
+      ];
+      let lastErr = '';
+      for (const url of ttsHosts) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${hfKey}`,
+              'Content-Type': 'application/json',
+              Accept: 'audio/flac',
+            },
+            body: JSON.stringify({ inputs: clean }),
+          });
+          if (!res.ok) { lastErr = `${res.status} ${(await res.text()).slice(0,200)}`; continue; }
+          const buf = new Uint8Array(await res.arrayBuffer());
+          if (buf.length < 200) { lastErr = 'empty audio'; continue; }
+          const mime = res.headers.get('content-type') || 'audio/flac';
+          return { audio: base64Encode(buf), mime };
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : String(e);
+        }
+      }
+      throw new Error(`TTS failed: ${lastErr}`);
+    }
+
+    case '/api/notes/spoken-script': {
+      const notes = body.notes;
+      if (!notes) throw new Error('Missing notes');
+      const subject = asNonEmptyString(body.subject) || '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_CHAT,
+        system:
+          'You convert structured study notes into a friendly spoken audio script — like a one-to-one tutor talking out loud. RULES: (1) Open by reading the overview as context. (2) Then go through every section: announce the heading, restate the main idea simply, then EXPLAIN each bullet and example in detail with plain conversational language so a learner truly understands — not just reading them. (3) Use natural transitions ("Okay, next…", "Now think of it this way…"). (4) End by summarising the key takeaways. (5) Output PLAIN spoken English ONLY — no markdown, no HTML tags, no bullet symbols, no headings syntax, no asterisks. Return ONLY valid JSON.',
+        user: `Subject: ${subject}\n\nNotes JSON:\n${JSON.stringify(notes).slice(0, 12000)}\n\nReturn JSON: { "script": string (the complete spoken script, aim for 700-1500 words, plain spoken English) }`,
+        maxTokens: 4000,
+      });
+    }
+
     default:
       throw new Error(`Unknown endpoint: ${endpoint}`);
   }
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
