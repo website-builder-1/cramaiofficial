@@ -48,39 +48,50 @@ export function FocusWidget() {
     else document.body.classList.remove('focus-mode');
   }, [focus.focusModeUI]);
 
-  // Brown noise via WebAudio
+  // Brown noise via WebAudio. Plays whenever the sound toggle is on
+  // (independent of timer) so users can verify it works and use it ad-hoc.
   useEffect(() => {
-    if (focus.sound && focus.active) {
-      try {
-        const ctx = new AudioContext();
-        const bufferSize = 2 * ctx.sampleRate;
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) {
-          const white = Math.random() * 2 - 1;
-          data[i] = (lastOut + 0.02 * white) / 1.02;
-          lastOut = data[i];
-          data[i] *= 3.5;
-        }
-        const node = ctx.createBufferSource();
-        node.buffer = buffer;
-        node.loop = true;
-        const gain = ctx.createGain();
-        gain.gain.value = 0.15;
-        node.connect(gain).connect(ctx.destination);
-        node.start();
-        audioRef.current = { ctx, node };
-        return () => {
-          try { node.stop(); } catch { /* noop */ }
-          ctx.close();
-          audioRef.current = null;
-        };
-      } catch (e) {
-        console.error('Audio init failed', e);
+    if (!focus.sound) return;
+    let stopped = false;
+    try {
+      const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      const ctx = new AC();
+      // Chrome/Safari start the context suspended until a user gesture.
+      // The toggle click IS a user gesture, so resume() should succeed.
+      ctx.resume().catch(() => { /* noop */ });
+      const bufferSize = 2 * ctx.sampleRate;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      let lastOut = 0;
+      for (let i = 0; i < bufferSize; i++) {
+        const white = Math.random() * 2 - 1;
+        // Standard brown-noise IIR + post-gain compensation.
+        data[i] = (lastOut + 0.02 * white) / 1.02;
+        lastOut = data[i];
+        data[i] *= 3.5;
       }
+      const node = ctx.createBufferSource();
+      node.buffer = buffer;
+      node.loop = true;
+      const gain = ctx.createGain();
+      gain.gain.value = 0.35; // audible default
+      node.connect(gain).connect(ctx.destination);
+      node.start();
+      audioRef.current = { ctx, node };
+      if (!focus.active) {
+        toast('Brown noise on 🎧', { duration: 1500 });
+      }
+      return () => {
+        stopped = true;
+        try { node.stop(); } catch { /* noop */ }
+        try { ctx.close(); } catch { /* noop */ }
+        audioRef.current = null;
+      };
+    } catch (e) {
+      console.error('Audio init failed', e);
+      toast.error('Could not start brown noise on this browser.');
     }
-  }, [focus.sound, focus.active]);
+  }, [focus.sound]);
 
   // Hyperfocus nudge
   const [sessionStart] = useState(Date.now());
