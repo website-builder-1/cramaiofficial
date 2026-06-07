@@ -20,6 +20,11 @@ export function FocusWidget() {
   const audioRef = useRef<{ ctx: AudioContext; node: AudioBufferSourceNode } | null>(null);
   const gainRef = useRef<GainNode | null>(null);
 
+  // Resolve defaults defensively in case persisted state is older than the
+  // current store schema (avoids undefined volume / soundType).
+  const volume = typeof focus.volume === 'number' ? focus.volume : 0.35;
+  const soundType = (focus.soundType as 'brown' | 'pink' | 'white' | 'rain') || 'brown';
+
   // Tick
   useEffect(() => {
     if (!focus.active) return;
@@ -53,6 +58,13 @@ export function FocusWidget() {
   // Ambient noise via WebAudio. Plays whenever the sound toggle is on
   // (independent of timer). Rebuilds when the sound type changes.
   useEffect(() => {
+    // Always clean up any existing node first
+    if (audioRef.current) {
+      try { audioRef.current.node.stop(); } catch { /* noop */ }
+      try { audioRef.current.ctx.close(); } catch { /* noop */ }
+      audioRef.current = null;
+      gainRef.current = null;
+    }
     if (!focus.sound) return;
     try {
       const AC = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
@@ -61,9 +73,9 @@ export function FocusWidget() {
       const bufferSize = 4 * ctx.sampleRate;
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
-      if (focus.soundType === 'white') {
+      if (soundType === 'white') {
         for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
-      } else if (focus.soundType === 'pink') {
+      } else if (soundType === 'pink') {
         // Paul Kellet pink noise approximation
         let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
         for (let i = 0; i < bufferSize; i++) {
@@ -77,7 +89,7 @@ export function FocusWidget() {
           data[i] = (b0+b1+b2+b3+b4+b5+b6+white*0.5362) * 0.18;
           b6 = white*0.115926;
         }
-      } else if (focus.soundType === 'rain') {
+      } else if (soundType === 'rain') {
         // Brown noise base + sparse high-frequency droplets
         let lastOut = 0;
         for (let i = 0; i < bufferSize; i++) {
@@ -101,13 +113,13 @@ export function FocusWidget() {
       node.buffer = buffer;
       node.loop = true;
       const gain = ctx.createGain();
-      gain.gain.value = focus.volume;
+      gain.gain.value = volume;
       node.connect(gain).connect(ctx.destination);
       node.start();
       audioRef.current = { ctx, node };
       gainRef.current = gain;
       if (!focus.active) {
-        toast(`${focus.soundType[0].toUpperCase()+focus.soundType.slice(1)} noise on 🎧`, { duration: 1500 });
+        toast(`${soundType[0].toUpperCase()+soundType.slice(1)} noise on 🎧`, { duration: 1500 });
       }
       return () => {
         try { node.stop(); } catch { /* noop */ }
@@ -119,14 +131,14 @@ export function FocusWidget() {
       console.error('Audio init failed', e);
       toast.error('Could not start ambient noise on this browser.');
     }
-  }, [focus.sound, focus.soundType]);
+  }, [focus.sound, soundType]);
 
   // Live volume updates without restarting the buffer
   useEffect(() => {
     if (gainRef.current) {
-      gainRef.current.gain.value = focus.volume;
+      gainRef.current.gain.value = volume;
     }
-  }, [focus.volume]);
+  }, [volume]);
 
   // Hyperfocus nudge
   const [sessionStart] = useState(Date.now());
@@ -216,10 +228,23 @@ export function FocusWidget() {
               <Focus className="w-4 h-4" />
             </Button>
             <Button
-              onClick={() => setFocus({ sound: !focus.sound })}
+              onClick={() => {
+                const next = !focus.sound;
+                setFocus({ sound: next });
+                if (!next) {
+                  // Force-stop immediately so audio cuts even if cleanup is delayed
+                  if (gainRef.current) { try { gainRef.current.gain.value = 0; } catch { /* noop */ } }
+                  if (audioRef.current) {
+                    try { audioRef.current.node.stop(); } catch { /* noop */ }
+                    try { audioRef.current.ctx.close(); } catch { /* noop */ }
+                    audioRef.current = null;
+                    gainRef.current = null;
+                  }
+                }
+              }}
               variant={focus.sound ? 'default' : 'outline'}
               size="sm"
-              title="Brown noise"
+              title={focus.sound ? 'Mute ambient sound' : 'Play ambient sound'}
             >
               {focus.sound ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
             </Button>
