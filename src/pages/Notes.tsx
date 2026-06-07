@@ -142,7 +142,7 @@ export default function Notes() {
             <div className="glass-card rounded-xl p-6">
               <RichText html={data.title} as="h2" className="text-2xl font-bold mb-3 gradient-text" />
               {data.overview && <RichText html={data.overview} className="text-muted-foreground" />}
-              <TtsPlayButton text={`${data.title.replace(/<[^>]+>/g, '')}. ${(data.overview || '').replace(/<[^>]+>/g, '')}`} className="mt-2" />
+              <TtsPlayButton notes={data} subject={subject} className="mt-3" label="Read & explain (AI tutor)" />
             </div>
 
             {data.sections?.map((s, i) => (
