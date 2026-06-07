@@ -380,6 +380,19 @@ async function handleEndpoint(
       });
     }
 
+    case '/api/suggest-questions': {
+      const content = truncate(body.content, 6000);
+      const count = Math.min(8, Math.max(3, Number(body.count) || 4));
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You generate short, varied study questions a curious student would ask their tutor about the given material. Return ONLY valid JSON.' + HTML_FORMAT_RULES + adhdSystem(body) + syllabusSystem(body),
+        user: `Material:\n${content || '(no material provided — generate generic study-skill prompts)'}\n\nReturn JSON: {"questions": string[]}\nExactly ${count} questions. Each under 14 words. Mix conceptual (\"why\", \"how\"), comparison, and application/example prompts. Avoid repeating the same opener. No numbering, no markdown.`,
+        maxTokens: 500,
+      });
+    }
+
     case '/api/image/generate': {
       const prompt = asNonEmptyString(body.prompt);
       if (!prompt) throw new Error('Missing prompt');
