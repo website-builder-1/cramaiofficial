@@ -63,12 +63,20 @@ export interface GradeResult {
   score: number;
   totalQuestions: number;
   percentage: number;
+  totalMarksAwarded?: number;
+  totalMarksAvailable?: number;
   answers: {
     questionId: string;
     isCorrect: boolean;
     userAnswer: string;
     correctAnswer: string;
     explanation?: string;
+    marksAwarded?: number;
+    marksAvailable?: number;
+    markBreakdown?: { point: string; marksAwarded: number; marksAvailable: number; note?: string }[];
+    examinerFeedback?: string;
+    improvementTips?: string[];
+    missingPoints?: string[];
   }[];
   weakTopics: string[];
   recommendations: string[];

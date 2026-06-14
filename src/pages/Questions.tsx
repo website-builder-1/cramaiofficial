@@ -20,7 +20,9 @@ import {
   XCircle,
   RotateCcw,
   Target,
-  Trophy
+  Trophy,
+  Award,
+  Lightbulb
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { type Question, generateQuestions, gradeAnswers } from '@/lib/api';
@@ -69,10 +71,8 @@ export default function Questions() {
   const showResults = questions.length > 0;
 
   const gradedById = (() => {
-    const map: Record<string, { isCorrect: boolean; correctAnswer: string; explanation?: string }> = {};
-    gradeResult?.answers?.forEach((a) => {
-      map[a.questionId] = { isCorrect: a.isCorrect, correctAnswer: a.correctAnswer, explanation: a.explanation };
-    });
+    const map: Record<string, NonNullable<typeof gradeResult>['answers'][number]> = {};
+    gradeResult?.answers?.forEach((a) => { map[a.questionId] = a; });
     return map;
   })();
 
@@ -328,7 +328,13 @@ export default function Questions() {
                     <h3 className="text-2xl font-bold mb-1">
                       {score} / {questions.length} Correct
                     </h3>
-                    <p className="text-4xl font-bold gradient-text mb-4">{percentage}%</p>
+                    <p className="text-4xl font-bold gradient-text mb-1">{percentage}%</p>
+                    {typeof gradeResult?.totalMarksAvailable === 'number' && gradeResult.totalMarksAvailable > 0 && (
+                      <p className="text-sm text-muted-foreground mb-4">
+                        <Award className="w-4 h-4 inline-block mr-1 text-primary" />
+                        {gradeResult.totalMarksAwarded ?? 0} / {gradeResult.totalMarksAvailable} marks awarded
+                      </p>
+                    )}
                     <Button onClick={handleReset} variant="outline" className="gap-2">
                       <RotateCcw className="w-4 h-4" />
                       Try Again
@@ -425,11 +431,19 @@ export default function Questions() {
                               ? 'border-success/40 bg-success/5'
                               : 'border-destructive/40 bg-destructive/5'
                           )}>
-                            <div className="flex items-center gap-2 mb-2 font-medium">
-                              {gradedById[question.id].isCorrect ? (
-                                <><CheckCircle2 className="w-4 h-4 text-success" /> <span className="text-success">Correct</span></>
-                              ) : (
-                                <><XCircle className="w-4 h-4 text-destructive" /> <span className="text-destructive">Needs work</span></>
+                            <div className="flex items-center justify-between gap-2 mb-2 font-medium">
+                              <div className="flex items-center gap-2">
+                                {gradedById[question.id].isCorrect ? (
+                                  <><CheckCircle2 className="w-4 h-4 text-success" /> <span className="text-success">Strong answer</span></>
+                                ) : (
+                                  <><XCircle className="w-4 h-4 text-destructive" /> <span className="text-destructive">Needs work</span></>
+                                )}
+                              </div>
+                              {typeof gradedById[question.id].marksAvailable === 'number' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary text-xs font-semibold">
+                                  <Award className="w-3.5 h-3.5" />
+                                  {gradedById[question.id].marksAwarded ?? 0} / {gradedById[question.id].marksAvailable} marks
+                                </span>
                               )}
                             </div>
                             <div className="text-foreground">
@@ -439,6 +453,63 @@ export default function Questions() {
                                 as="span"
                               />
                             </div>
+                            {gradedById[question.id].examinerFeedback && (
+                              <div className="mt-3 text-foreground">
+                                <strong className="text-foreground">Examiner feedback:</strong>{' '}
+                                <RichText html={gradedById[question.id].examinerFeedback || ''} as="span" />
+                              </div>
+                            )}
+                            {gradedById[question.id].markBreakdown && gradedById[question.id].markBreakdown!.length > 0 && (
+                              <div className="mt-3">
+                                <p className="font-semibold mb-1.5 text-foreground">Mark-by-mark breakdown</p>
+                                <ul className="space-y-1.5">
+                                  {gradedById[question.id].markBreakdown!.map((mb, i) => {
+                                    const full = mb.marksAwarded >= mb.marksAvailable && mb.marksAvailable > 0;
+                                    const none = mb.marksAwarded <= 0;
+                                    return (
+                                      <li key={i} className="flex gap-2 items-start">
+                                        <span className={cn(
+                                          'font-mono text-xs shrink-0 px-1.5 py-0.5 rounded',
+                                          full ? 'bg-success/15 text-success' : none ? 'bg-destructive/15 text-destructive' : 'bg-warning/15 text-warning'
+                                        )}>
+                                          {mb.marksAwarded}/{mb.marksAvailable}
+                                        </span>
+                                        <span className="text-foreground">
+                                          <RichText html={mb.point} as="span" />
+                                          {mb.note && (
+                                            <span className="block text-xs text-muted-foreground mt-0.5">
+                                              <RichText html={mb.note} as="span" />
+                                            </span>
+                                          )}
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                            {gradedById[question.id].missingPoints && gradedById[question.id].missingPoints!.length > 0 && (
+                              <div className="mt-3">
+                                <p className="font-semibold mb-1 text-foreground">Points you missed</p>
+                                <ul className="list-disc pl-5 space-y-0.5 text-muted-foreground">
+                                  {gradedById[question.id].missingPoints!.map((mp, i) => (
+                                    <li key={i}><RichText html={mp} as="span" /></li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                            {gradedById[question.id].improvementTips && gradedById[question.id].improvementTips!.length > 0 && (
+                              <div className="mt-3">
+                                <p className="font-semibold mb-1 text-foreground flex items-center gap-1.5">
+                                  <Lightbulb className="w-4 h-4 text-primary" /> How to push the marks up
+                                </p>
+                                <ul className="list-disc pl-5 space-y-0.5 text-foreground">
+                                  {gradedById[question.id].improvementTips!.map((tip, i) => (
+                                    <li key={i}><RichText html={tip} as="span" /></li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
