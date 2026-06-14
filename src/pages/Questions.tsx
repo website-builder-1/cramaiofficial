@@ -20,7 +20,9 @@ import {
   XCircle,
   RotateCcw,
   Target,
-  Trophy
+  Trophy,
+  Award,
+  Lightbulb
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { type Question, generateQuestions, gradeAnswers } from '@/lib/api';
@@ -69,10 +71,8 @@ export default function Questions() {
   const showResults = questions.length > 0;
 
   const gradedById = (() => {
-    const map: Record<string, { isCorrect: boolean; correctAnswer: string; explanation?: string }> = {};
-    gradeResult?.answers?.forEach((a) => {
-      map[a.questionId] = { isCorrect: a.isCorrect, correctAnswer: a.correctAnswer, explanation: a.explanation };
-    });
+    const map: Record<string, NonNullable<typeof gradeResult>['answers'][number]> = {};
+    gradeResult?.answers?.forEach((a) => { map[a.questionId] = a; });
     return map;
   })();
 
