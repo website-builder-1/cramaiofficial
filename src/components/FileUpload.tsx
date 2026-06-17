@@ -4,6 +4,7 @@ import { Upload, FileText, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import mammoth from 'mammoth/mammoth.browser';
 
 interface FileUploadProps {
   onFileContent: (content: string, fileName: string) => void;
@@ -26,6 +27,24 @@ export function FileUpload({
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const readFileContent = async (file: File): Promise<string> => {
+    const name = file.name.toLowerCase();
+    const isDocx =
+      name.endsWith('.docx') ||
+      file.type ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+    if (isDocx) {
+      const arrayBuffer = await file.arrayBuffer();
+      setUploadProgress(50);
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      setUploadProgress(100);
+      const text = (result.value || '').trim();
+      if (!text) {
+        throw new Error('Could not extract any text from this Word document.');
+      }
+      return text;
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       
@@ -82,7 +101,9 @@ export function FileUpload({
           toast.success(`${file.name} uploaded successfully!`);
         }
       } catch (error) {
-        toast.error('Failed to read file. Please try again.');
+        const msg =
+          error instanceof Error ? error.message : 'Failed to read file. Please try again.';
+        toast.error(msg);
         setUploadedFile(null);
       }
     },
