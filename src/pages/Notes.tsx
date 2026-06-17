@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LoadingCard } from '@/components/LoadingSpinner';
-import { NotebookPen, Sparkles, Download, Copy } from 'lucide-react';
+import { NotebookPen, Sparkles, Download, Copy, Printer } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
 import { generateNotes, type NotesResult } from '@/lib/api';
 import { toast } from 'sonner';
@@ -69,6 +69,46 @@ export default function Notes() {
     return lines.join('\n');
   };
 
+  const buildPrintableHtml = (n: NotesResult) => {
+    const title = (n.title || 'Study Notes').replace(/<[^>]+>/g, '');
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${title}</title>
+<style>
+  @page { margin: 18mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Georgia, 'Times New Roman', serif; color: #111; line-height: 1.55; max-width: 800px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 26pt; margin: 0 0 8pt; border-bottom: 2px solid #111; padding-bottom: 6pt; }
+  h2 { font-size: 16pt; margin: 18pt 0 6pt; }
+  h3 { font-size: 13pt; margin: 14pt 0 4pt; }
+  p, li { font-size: 11.5pt; }
+  ul { padding-left: 22pt; margin: 4pt 0 10pt; }
+  li { margin-bottom: 3pt; }
+  .overview { font-style: italic; color: #333; }
+  .examples { background: #f4f4f0; padding: 8pt 12pt; border-left: 3pt solid #888; margin: 8pt 0; }
+  .examples p { margin: 0 0 4pt; font-weight: bold; text-transform: uppercase; font-size: 9.5pt; letter-spacing: 0.5pt; }
+  .takeaways { border-top: 1px solid #999; margin-top: 18pt; padding-top: 10pt; }
+  @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
+</style>
+</head>
+<body>
+  <h1>${title}</h1>
+  ${n.overview ? `<p class="overview">${n.overview}</p>` : ''}
+  ${(n.sections || []).map((s) => `
+    <section>
+      <h2>${s.heading}</h2>
+      ${s.body ? `<div>${s.body}</div>` : ''}
+      ${s.bullets?.length ? `<ul>${s.bullets.map((b) => `<li>${b}</li>`).join('')}</ul>` : ''}
+      ${s.examples?.length ? `<div class="examples"><p>Examples</p><ul>${s.examples.map((e) => `<li>${e}</li>`).join('')}</ul></div>` : ''}
+    </section>
+  `).join('')}
+  ${n.keyTakeaways?.length ? `<div class="takeaways"><h2>Key Takeaways</h2><ul>${n.keyTakeaways.map((b) => `<li>${b}</li>`).join('')}</ul></div>` : ''}
+</body>
+</html>`;
+  };
+
   const copyAll = async () => {
     if (!data) return;
     await navigator.clipboard.writeText(buildMarkdown(data));
@@ -77,13 +117,33 @@ export default function Notes() {
 
   const download = () => {
     if (!data) return;
-    const blob = new Blob([buildMarkdown(data)], { type: 'text/html' });
+    const blob = new Blob([buildPrintableHtml(data)], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `${(data.title || 'notes').replace(/[^a-z0-9-_ ]/gi, '').slice(0, 60)}.html`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const print = () => {
+    if (!data) return;
+    const html = buildPrintableHtml(data);
+    const w = window.open('', '_blank', 'width=900,height=1000');
+    if (!w) {
+      toast.error('Pop-up blocked — allow pop-ups to print.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    const trigger = () => {
+      w.focus();
+      w.print();
+    };
+    // Wait for layout before printing
+    if (w.document.readyState === 'complete') setTimeout(trigger, 200);
+    else w.addEventListener('load', () => setTimeout(trigger, 200));
   };
 
   return (
@@ -133,6 +193,9 @@ export default function Notes() {
               </Button>
               <Button variant="outline" size="sm" onClick={download} className="gap-2">
                 <Download className="w-4 h-4" /> Download .html
+              </Button>
+              <Button variant="outline" size="sm" onClick={print} className="gap-2">
+                <Printer className="w-4 h-4" /> Print
               </Button>
               <Button variant="outline" size="sm" onClick={handleGenerate} className="gap-2">
                 <Sparkles className="w-4 h-4" /> Regenerate
