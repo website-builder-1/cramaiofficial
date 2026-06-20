@@ -1,21 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { LoadingCard } from '@/components/LoadingSpinner';
-import { NotebookPen, Sparkles, Download, Copy, Printer } from 'lucide-react';
+import { NotebookPen, Sparkles, Download, Copy, Printer, ShieldCheck, Loader2 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { generateNotes, type NotesResult } from '@/lib/api';
+import { generateNotes, hallucinationCheck, type NotesResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
 import { ChunkList } from '@/components/ChunkList';
 import { Image as ImageIcon } from 'lucide-react';
 import { ReentryCard } from '@/components/ReentryCard';
-import { HallucinationFlags } from '@/components/HallucinationFlags';
 import { TtsPlayButton } from '@/components/TtsPlayButton';
 
 export default function Notes() {
   const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData, awardXp } = useStudyStore();
   const setLastContext = useStudyStore((s) => s.setLastContext);
+  const hallucinationCheckEnabled = useStudyStore((s) => s.adhdProfile.hallucinationCheck);
   const material = getStudyMaterial();
   useEffect(() => {
     setLastContext('/notes', { label: notesData?.title ? `Notes: ${notesData.title.replace(/<[^>]+>/g, '')}` : `Notes: ${subject || 'study material'}` });
@@ -23,6 +23,49 @@ export default function Notes() {
   const data = notesData;
   const [loading, setLoading] = useState(false);
   const [showVisuals, setShowVisuals] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyStatus, setVerifyStatus] = useState<null | { ok: true } | { ok: false; attempts: number }>(null);
+  const verifyRunRef = useRef(0);
+
+  const draftText = (n: NotesResult) =>
+    [n.title, n.overview || '', ...(n.sections || []).flatMap((s) => [s.heading, s.body || '', ...(s.bullets || []), ...(s.examples || [])]), ...(n.keyTakeaways || [])]
+      .join('\n')
+      .replace(/<[^>]+>/g, '');
+
+  const verifyAndRegenerate = async (initial: NotesResult) => {
+    if (!material) return;
+    const runId = ++verifyRunRef.current;
+    setVerifying(true);
+    setVerifyStatus(null);
+    let current = initial;
+    const avoid: string[] = [];
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const check = await hallucinationCheck({ source: material, draft: draftText(current) });
+      if (verifyRunRef.current !== runId) return; // superseded
+      const flags = check.data?.flaggedClaims || [];
+      if (!flags.length) {
+        setVerifying(false);
+        setVerifyStatus({ ok: true });
+        return;
+      }
+      if (attempt === MAX_ATTEMPTS) {
+        setVerifying(false);
+        setVerifyStatus({ ok: false, attempts: attempt });
+        return;
+      }
+      flags.forEach((f) => { if (f.text) avoid.push(f.text); });
+      const regen = await generateNotes(material, { subject, examLevel, examBoard, avoidClaims: avoid });
+      if (verifyRunRef.current !== runId) return;
+      if (regen.error || !regen.data) {
+        setVerifying(false);
+        setVerifyStatus({ ok: false, attempts: attempt });
+        return;
+      }
+      current = regen.data;
+      setNotesData(current);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!material || material.length < 10) {
@@ -30,6 +73,7 @@ export default function Notes() {
       return;
     }
     setLoading(true);
+    setVerifyStatus(null);
     const res = await generateNotes(material, { subject, examLevel, examBoard });
     setLoading(false);
     if (res.error || !res.data) {
@@ -39,6 +83,9 @@ export default function Notes() {
     setNotesData(res.data);
     awardXp(20);
     toast.success('Notes ready!');
+    if (hallucinationCheckEnabled) {
+      void verifyAndRegenerate(res.data);
+    }
   };
 
   useEffect(() => {
@@ -179,6 +226,18 @@ export default function Notes() {
         ) : (
           <div className="space-y-6 animate-slide-up">
             <div className="flex flex-wrap gap-2 justify-end">
+              {verifying && (
+                <div className="inline-flex items-center gap-2 text-xs text-muted-foreground mr-auto">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Verifying every claim against your source…
+                </div>
+              )}
+              {!verifying && verifyStatus?.ok && (
+                <div className="inline-flex items-center gap-2 text-xs text-success mr-auto">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  All claims verified against your source
+                </div>
+              )}
               <Button
                 variant={showVisuals ? 'default' : 'outline'}
                 size="sm"
@@ -249,13 +308,6 @@ export default function Notes() {
                   {data.keyTakeaways.map((b, i) => <li key={i}><RichText html={b} as="span" /></li>)}
                 </ul>
               </div>
-            )}
-            {material && data && (
-              <HallucinationFlags
-                source={material}
-                draft={[data.title, data.overview || '', ...(data.sections || []).flatMap((s) => [s.heading, s.body || '', ...(s.bullets || [])]), ...(data.keyTakeaways || [])].join('\n').replace(/<[^>]+>/g, '')}
-                cacheKey={`notes:${data.title}`}
-              />
             )}
           </div>
         )}
