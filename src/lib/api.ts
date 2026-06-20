@@ -362,6 +362,21 @@ export async function hallucinationCheck(params: {
   return apiRequest('/api/hallucination-check', params);
 }
 
+export interface ClaimVerdict {
+  index: number;
+  claim: string;
+  verdict: 'supported' | 'correct' | 'incorrect';
+  reason?: string;
+  correctedText?: string;
+}
+
+export async function verifyClaims(params: {
+  source: string;
+  claims: string[];
+}): Promise<ApiResponse<{ results: ClaimVerdict[] }>> {
+  return apiRequest('/api/claims/verify', params);
+}
+
 // AI voice synthesis (HuggingFace MMS-TTS via proxy)
 export async function ttsAudio(text: string): Promise<ApiResponse<{ audio: string; mime: string }>> {
   return apiRequest('/api/tts', { text });

@@ -638,6 +638,23 @@ async function handleEndpoint(
       });
     }
 
+    case '/api/claims/verify': {
+      const source = truncate(body.source, 10000);
+      const claims = Array.isArray(body.claims)
+        ? (body.claims as unknown[]).map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+        : [];
+      if (!source || claims.length === 0) throw new Error('Missing source or claims');
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are a rigorous fact-checker. For each CLAIM, decide whether it is factually correct in the real world, INDEPENDENTLY of whether the SOURCE explicitly states it. A claim can be "supported" (the SOURCE explicitly supports it), "correct" (true in general academic/real-world knowledge but not in the SOURCE), or "incorrect" (false, misleading, or contradicted). Be strict: if you are not confident the claim is true, mark it "incorrect". Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES,
+        user: `SOURCE:\n${source}\n\nCLAIMS (one per line, indexed):\n${claims.map((c, i) => `${i + 1}. ${c}`).join('\n')}\n\nReturn JSON: {"results": [{"index": number (1-based), "claim": string, "verdict": "supported" | "correct" | "incorrect", "reason": string (1 short sentence), "correctedText"?: string (only when verdict is "incorrect" — the factually accurate replacement, max 25 words)}]}\n\nReturn one entry per claim in the same order.`,
+        maxTokens: 1500,
+      });
+    }
+
     case '/api/tts': {
       const text = asNonEmptyString(body.text) || '';
       if (!text) throw new Error('Missing text');

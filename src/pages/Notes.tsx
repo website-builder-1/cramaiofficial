@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingCard } from '@/components/LoadingSpinner';
 import { NotebookPen, Sparkles, Download, Copy, Printer, ShieldCheck, Loader2 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { generateNotes, hallucinationCheck, type NotesResult } from '@/lib/api';
+import { generateNotes, hallucinationCheck, verifyClaims, type NotesResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
@@ -49,12 +49,27 @@ export default function Notes() {
         setVerifyStatus({ ok: true });
         return;
       }
+      // Second pass: ask the model to judge whether each flagged claim is
+      // actually factually incorrect, or merely "not in the source but true".
+      // Only incorrect claims should be forbidden and trigger regeneration.
+      const claimTexts = flags.map((f) => f.text).filter((t): t is string => !!t);
+      const verdictRes = await verifyClaims({ source: material, claims: claimTexts });
+      if (verifyRunRef.current !== runId) return;
+      const verdicts = verdictRes.data?.results || [];
+      const incorrect = verdicts.filter((v) => v.verdict === 'incorrect');
+      if (incorrect.length === 0) {
+        // All flagged claims are either supported by the source or
+        // factually correct general knowledge — keep the notes as-is.
+        setVerifying(false);
+        setVerifyStatus({ ok: true });
+        return;
+      }
       if (attempt === MAX_ATTEMPTS) {
         setVerifying(false);
         setVerifyStatus({ ok: false, attempts: attempt });
         return;
       }
-      flags.forEach((f) => { if (f.text) avoid.push(f.text); });
+      incorrect.forEach((v) => { if (v.claim) avoid.push(v.claim); });
       const regen = await generateNotes(material, { subject, examLevel, examBoard, avoidClaims: avoid });
       if (verifyRunRef.current !== runId) return;
       if (regen.error || !regen.data) {
