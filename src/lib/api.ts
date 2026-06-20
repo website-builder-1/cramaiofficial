@@ -277,7 +277,7 @@ export interface NotesResult {
 
 export async function generateNotes(
   content: string,
-  context?: { subject?: string; examLevel?: string; examBoard?: string },
+  context?: { subject?: string; examLevel?: string; examBoard?: string; avoidClaims?: string[] },
 ): Promise<ApiResponse<NotesResult>> {
   return apiRequest<NotesResult>('/api/notes/generate', withGrounding({ content, ...(context || {}) }));
 }
