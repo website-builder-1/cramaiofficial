@@ -208,10 +208,10 @@ export default function Analyzer() {
       analyzeDocument(content, subject, examLevel, examBoard, imageUrls),
       imageUrls.length
         ? extractSubtopicsFromImages({ images: imageUrls, subject, examLevel, examBoard })
-        : Promise.resolve({ data: undefined as undefined | { subtopics: never[] } } as Awaited<ReturnType<typeof extractSubtopicsFromImages>>),
+        : Promise.resolve(null),
     ]);
 
-    if (ocrRes && 'data' in ocrRes && ocrRes.data?.subtopics?.length) {
+    if (ocrRes?.data?.subtopics?.length) {
       const cleaned = ocrRes.data.subtopics
         .filter((s) => s && typeof s.heading === 'string' && s.heading.trim().length > 0)
         .map((s) => ({ heading: s.heading.trim(), scope: s.scope?.trim() }));
