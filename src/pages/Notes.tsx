@@ -16,6 +16,7 @@ export default function Notes() {
   const { getStudyMaterial, subject, examLevel, examBoard, notesData, setNotesData, awardXp } = useStudyStore();
   const setLastContext = useStudyStore((s) => s.setLastContext);
   const hallucinationCheckEnabled = useStudyStore((s) => s.adhdProfile.hallucinationCheck);
+  const ocrSubtopics = useStudyStore((s) => s.ocrSubtopics);
   const material = getStudyMaterial();
   useEffect(() => {
     setLastContext('/notes', { label: notesData?.title ? `Notes: ${notesData.title.replace(/<[^>]+>/g, '')}` : `Notes: ${subject || 'study material'}` });
@@ -93,7 +94,14 @@ export default function Notes() {
     setProgress({ done: 0, total: 1, label: 'Mapping the syllabus…' });
 
     // Pass 1: outline — identify EVERY subtopic the exam expects.
-    const outlineRes = await generateNotesOutline(material, { subject, examLevel, examBoard });
+    // Seed with OCR-detected subtopics from any uploaded images so the model
+    // treats the student's own checklist/syllabus page as authoritative.
+    const outlineRes = await generateNotesOutline(material, {
+      subject,
+      examLevel,
+      examBoard,
+      seedSubtopics: ocrSubtopics?.length ? ocrSubtopics : undefined,
+    });
     if (outlineRes.error || !outlineRes.data || !Array.isArray(outlineRes.data.subtopics) || outlineRes.data.subtopics.length === 0) {
       // Fallback to single-shot generator.
       const res = await generateNotes(material, { subject, examLevel, examBoard });
