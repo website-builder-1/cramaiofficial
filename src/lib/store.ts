@@ -11,6 +11,7 @@ import type {
   GradeResult,
   SyllabusContext,
   PastPaperContext,
+  OcrSubtopic,
 } from './api';
 
 export interface FlashcardsState {
@@ -121,6 +122,10 @@ interface StudyState {
 
   pastPaperContext: PastPaperContext | null;
   setPastPaperContext: (ctx: PastPaperContext | null) => void;
+
+  // OCR-detected subtopics from uploaded images (syllabus pages, checklists).
+  ocrSubtopics: OcrSubtopic[];
+  setOcrSubtopics: (subtopics: OcrSubtopic[]) => void;
   
   // Analysis results
   analysisResult: AnalysisResult | null;
@@ -249,6 +254,9 @@ export const useStudyStore = create<StudyState>()(
       pastPaperContext: null,
       setPastPaperContext: (pastPaperContext) => set({ pastPaperContext }),
 
+      ocrSubtopics: [],
+      setOcrSubtopics: (ocrSubtopics) => set({ ocrSubtopics }),
+
       analysisResult: null,
       setAnalysisResult: (result) => set({ analysisResult: result }),
       
@@ -277,6 +285,7 @@ export const useStudyStore = create<StudyState>()(
           studyPlan: null,
           weakTopics: [],
           imageCache: {},
+          ocrSubtopics: [],
         }),
 
       imageCache: {},
@@ -417,6 +426,7 @@ export const useStudyStore = create<StudyState>()(
           syllabusCode: '',
           syllabusContext: null,
           pastPaperContext: null,
+          ocrSubtopics: [],
         }),
 
       lastContexts: {},
@@ -478,6 +488,7 @@ export const useStudyStore = create<StudyState>()(
         analysisResult: s.analysisResult,
         syllabusContext: s.syllabusContext,
         pastPaperContext: s.pastPaperContext,
+        ocrSubtopics: s.ocrSubtopics,
         notesData: s.notesData,
         summaryData: s.summaryData,
         flashcardsState: s.flashcardsState,
