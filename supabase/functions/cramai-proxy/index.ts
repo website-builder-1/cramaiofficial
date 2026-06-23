@@ -362,6 +362,48 @@ async function handleEndpoint(
       });
     }
 
+    case '/api/notes/outline': {
+      const content = truncate(body.content, 12000);
+      const ctx = contextBlock(body);
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are an exam-syllabus mapper. Read the provided material (which may be a topic name, list of subtopics, image OCR, or full text) and identify EVERY subtopic a student MUST understand for the named exam board, level, and subject. Use your knowledge of the specified specification (e.g. AQA A-level Biology 7402, Edexcel GCSE Maths 1MA1, IB Physics HL) to expand a sparse topic into the full set of examinable subtopics — but ONLY the ones that are actually on the spec for THIS topic. Do NOT pad with unrelated material. Do NOT invent subtopics that are not on the spec. Each subtopic must be something an examiner could legitimately ask about. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES + syllabusSystem(body) + adhdSystem(body),
+        user: `${ctx}Material / topic provided by the student:\n${content}\n\nReturn JSON:\n{\n  "title": string,            // proper topic title in textbook style\n  "overview": string,         // 2-4 sentence factual intro to the whole topic\n  "subtopics": [\n    {\n      "heading": string,      // short noun-phrase subtopic title\n      "scope": string,         // 1-2 sentences: exactly what the student must know about this subtopic for the exam\n      "examPoints": string[],  // 3-8 bullet points describing the SPECIFIC facts / skills / formulas / definitions the exam expects on this subtopic\n      "priority": "core" | "supporting"\n    }\n  ],\n  "keyTakeaways": string[]    // 4-6 revision-ready statements covering the whole topic\n}\n\nRules:\n- Produce as MANY subtopics as the specification genuinely requires for full exam coverage of this topic — typically 4 to 14. Do not invent filler. Do not skip required material.\n- Every subtopic must be NEEDED to answer exam questions on this topic. Reject any subtopic that is "nice to know" but not on the spec.\n- Order subtopics in a natural teaching sequence.`,
+        maxTokens: 2500,
+      });
+    }
+
+    case '/api/notes/section': {
+      const content = truncate(body.content, 8000);
+      const ctx = contextBlock(body);
+      const heading = asNonEmptyString(body.heading) || 'Subtopic';
+      const scope = asNonEmptyString(body.scope) || '';
+      const examPoints = Array.isArray(body.examPoints)
+        ? (body.examPoints as unknown[]).map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+        : [];
+      const avoidClaims = Array.isArray(body.avoidClaims)
+        ? (body.avoidClaims as unknown[]).map((c) => String(c)).filter((c) => c.trim().length > 0).slice(0, 12)
+        : [];
+      const avoidBlock = avoidClaims.length
+        ? `\n\nSTRICT ACCURACY GUARD — do NOT include, rephrase, or imply any of these previously-flagged incorrect claims:\n${avoidClaims.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+        : '';
+      const pointsBlock = examPoints.length
+        ? `\n\nExam points this section MUST cover (each point must appear, fully explained, in body, bullets, or examples):\n${examPoints.map((c, i) => `${i + 1}. ${c}`).join('\n')}`
+        : '';
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You write ONE subtopic of exam-ready study notes. Style: textbook / handwritten exercise-book — crisp, third person, no chatter, no filler, no "let\'s", no emojis. Use your knowledge of the named exam board / level / subject specification to make sure the content matches what the exam expects (depth, terminology, command words, formulas, named examples). Cover the subtopic COMPLETELY for that exam — every fact, definition, mechanism, formula, edge case, common exam pitfall — but stay TIGHTLY on this subtopic only. Do NOT pad. Do NOT add unrelated material. If something is not needed for the exam on this subtopic, omit it. Use <strong> for key terms. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES + syllabusSystem(body) + adhdSystem(body),
+        user: `${ctx}Topic context / source material:\n${content}\n\nSubtopic to write: ${heading}\n${scope ? `Scope: ${scope}\n` : ''}${pointsBlock}${avoidBlock}\n\nReturn JSON for THIS ONE section only:\n{\n  "heading": string,\n  "body": string,          // 3-7 sentences of dense expository prose covering the definitions, mechanisms, causes/effects, formulas needed.\n  "bullets": string[],     // 4-10 short revision-ready bullets (<22 words each) covering remaining facts, steps, formulas, comparisons.\n  "examples": string[]     // 1-4 concrete worked examples or named real-world cases (1-2 sentences each). Empty array if genuinely not applicable.\n}`,
+        maxTokens: 2200,
+      });
+    }
+
     case '/api/chunk': {
       const content = truncate(body.content, 6000);
       const topic = asNonEmptyString(body.topic) || 'this material';
