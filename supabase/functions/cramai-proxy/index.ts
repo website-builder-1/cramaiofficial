@@ -365,14 +365,61 @@ async function handleEndpoint(
     case '/api/notes/outline': {
       const content = truncate(body.content, 12000);
       const ctx = contextBlock(body);
+      const seeds = Array.isArray(body.seedSubtopics)
+        ? (body.seedSubtopics as unknown[])
+            .map((s) => {
+              if (typeof s === 'string') return { heading: s };
+              if (s && typeof s === 'object') {
+                const o = s as Record<string, unknown>;
+                const heading = asNonEmptyString(o.heading);
+                if (!heading) return null;
+                return { heading, scope: asNonEmptyString(o.scope) };
+              }
+              return null;
+            })
+            .filter((x): x is { heading: string; scope?: string } => !!x)
+            .slice(0, 30)
+        : [];
+      const seedBlock = seeds.length
+        ? `\n\nOCR-DETECTED SUBTOPICS — these were extracted from the student's uploaded images (a syllabus page, topic list, or revision checklist). Treat them as the AUTHORITATIVE list of subtopics that MUST appear in the outline. Keep their wording where reasonable. You may add additional subtopics ONLY if the named exam specification requires them for full coverage of the same topic; do not drop any of these.\nDETECTED SUBTOPICS:\n${seeds.map((s, i) => `${i + 1}. ${s.heading}${s.scope ? ` — ${s.scope}` : ''}`).join('\n')}`
+        : '';
       return await callAIJSON({
         apiKey,
         model: MODEL_STRUCTURED,
         system:
           'You are an exam-syllabus mapper. Read the provided material (which may be a topic name, list of subtopics, image OCR, or full text) and identify EVERY subtopic a student MUST understand for the named exam board, level, and subject. Use your knowledge of the specified specification (e.g. AQA A-level Biology 7402, Edexcel GCSE Maths 1MA1, IB Physics HL) to expand a sparse topic into the full set of examinable subtopics — but ONLY the ones that are actually on the spec for THIS topic. Do NOT pad with unrelated material. Do NOT invent subtopics that are not on the spec. Each subtopic must be something an examiner could legitimately ask about. Return ONLY valid JSON.' +
           HTML_FORMAT_RULES + syllabusSystem(body) + adhdSystem(body),
-        user: `${ctx}Material / topic provided by the student:\n${content}\n\nReturn JSON:\n{\n  "title": string,            // proper topic title in textbook style\n  "overview": string,         // 2-4 sentence factual intro to the whole topic\n  "subtopics": [\n    {\n      "heading": string,      // short noun-phrase subtopic title\n      "scope": string,         // 1-2 sentences: exactly what the student must know about this subtopic for the exam\n      "examPoints": string[],  // 3-8 bullet points describing the SPECIFIC facts / skills / formulas / definitions the exam expects on this subtopic\n      "priority": "core" | "supporting"\n    }\n  ],\n  "keyTakeaways": string[]    // 4-6 revision-ready statements covering the whole topic\n}\n\nRules:\n- Produce as MANY subtopics as the specification genuinely requires for full exam coverage of this topic — typically 4 to 14. Do not invent filler. Do not skip required material.\n- Every subtopic must be NEEDED to answer exam questions on this topic. Reject any subtopic that is "nice to know" but not on the spec.\n- Order subtopics in a natural teaching sequence.`,
+        user: `${ctx}Material / topic provided by the student:\n${content}${seedBlock}\n\nReturn JSON:\n{\n  "title": string,            // proper topic title in textbook style\n  "overview": string,         // 2-4 sentence factual intro to the whole topic\n  "subtopics": [\n    {\n      "heading": string,      // short noun-phrase subtopic title\n      "scope": string,         // 1-2 sentences: exactly what the student must know about this subtopic for the exam\n      "examPoints": string[],  // 3-8 bullet points describing the SPECIFIC facts / skills / formulas / definitions the exam expects on this subtopic\n      "priority": "core" | "supporting"\n    }\n  ],\n  "keyTakeaways": string[]    // 4-6 revision-ready statements covering the whole topic\n}\n\nRules:\n- Produce as MANY subtopics as the specification genuinely requires for full exam coverage of this topic — typically 4 to 14. Do not invent filler. Do not skip required material.\n- Every subtopic must be NEEDED to answer exam questions on this topic. Reject any subtopic that is "nice to know" but not on the spec.\n- Order subtopics in a natural teaching sequence.\n- If OCR-DETECTED SUBTOPICS are provided, include EVERY one of them in your "subtopics" array.`,
         maxTokens: 2500,
+      });
+    }
+
+    case '/api/ocr/subtopics': {
+      const subject = asNonEmptyString(body.subject) || 'General';
+      const examLevel = asNonEmptyString(body.examLevel);
+      const examBoard = asNonEmptyString(body.examBoard);
+      const images = Array.isArray(body.images)
+        ? (body.images as unknown[]).filter((x): x is string => typeof x === 'string' && x.startsWith('data:image/')).slice(0, 6)
+        : [];
+      if (!images.length) throw new Error('At least one image is required');
+      const contextLine = [
+        `Subject: ${subject}`,
+        examLevel ? `Exam level: ${examLevel}` : null,
+        examBoard ? `Exam board / syllabus: ${examBoard}` : null,
+      ].filter(Boolean).join('\n');
+      const textPrompt = `${contextLine}\n\nThe attached image(s) are from the student. They may show:\n- a topic / subtopic checklist or syllabus page\n- a contents/table page from a textbook\n- handwritten or typed revision notes listing topics\n- a single topic name with subtopics underneath\n\nDO ALL OF THE FOLLOWING:\n1. Perform careful OCR on every readable region (headings, sub-headings, bullet lists, numbered items).\n2. Identify the overall TOPIC the image is about (if visible) and EVERY discrete subtopic listed or implied.\n3. For each subtopic, preserve the student's wording where sensible; clean obvious OCR noise.\n4. Reject items that are page numbers, dates, marks, decorations, or non-topic boilerplate.\n5. If the page is a checklist, every checkbox/bullet line is a subtopic.\n\nReturn JSON:\n{\n  "topic": string,                    // best-guess overall topic (empty string if unclear)\n  "subtopics": [\n    { "heading": string, "scope": string }  // scope = 1 short sentence describing what this subtopic covers, inferred from the image context and the named exam spec\n  ],\n  "rawText": string                   // the cleaned OCR text dump of the image(s), preserved for downstream prompts\n}`;
+      const userPayload = [
+        { type: 'text', text: textPrompt },
+        ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+      ];
+      return await callAIJSON({
+        apiKey,
+        model: MODEL_STRUCTURED,
+        system:
+          'You are an OCR + curriculum-mapping assistant. Read images of syllabus pages, topic lists, contents pages, or revision checklists and extract the structured list of subtopics they contain. Use your knowledge of the named exam board/level/subject to lightly clean OCR noise (e.g. expand abbreviations only when unambiguous). Never invent subtopics that are not present (or strongly implied) in the image. Return ONLY valid JSON.' +
+          HTML_FORMAT_RULES + syllabusSystem(body),
+        user: userPayload,
+        maxTokens: 2000,
       });
     }
 
