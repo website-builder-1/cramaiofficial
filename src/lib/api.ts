@@ -298,9 +298,25 @@ export interface NotesOutline {
 
 export async function generateNotesOutline(
   content: string,
-  context?: { subject?: string; examLevel?: string; examBoard?: string },
+  context?: { subject?: string; examLevel?: string; examBoard?: string; seedSubtopics?: { heading: string; scope?: string }[] },
 ): Promise<ApiResponse<NotesOutline>> {
   return apiRequest<NotesOutline>('/api/notes/outline', withGrounding({ content, ...(context || {}) }));
+}
+
+export interface OcrSubtopic { heading: string; scope?: string }
+export interface OcrSubtopicsResult {
+  topic: string;
+  subtopics: OcrSubtopic[];
+  rawText?: string;
+}
+
+export async function extractSubtopicsFromImages(params: {
+  images: string[];
+  subject?: string;
+  examLevel?: string;
+  examBoard?: string;
+}): Promise<ApiResponse<OcrSubtopicsResult>> {
+  return apiRequest<OcrSubtopicsResult>('/api/ocr/subtopics', withGrounding({ ...params }));
 }
 
 export async function generateNotesSection(params: {
