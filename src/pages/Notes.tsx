@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { LoadingCard } from '@/components/LoadingSpinner';
 import { NotebookPen, Sparkles, Download, Copy, Printer, ShieldCheck, Loader2 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { generateNotes, hallucinationCheck, verifyClaims, type NotesResult } from '@/lib/api';
+import { generateNotes, generateNotesOutline, generateNotesSection, hallucinationCheck, verifyClaims, type NotesResult, type NotesSection } from '@/lib/api';
 import { toast } from 'sonner';
 import { RichText } from '@/components/RichText';
 import { ConceptImage } from '@/components/ConceptImage';
@@ -22,6 +22,7 @@ export default function Notes() {
   }, [setLastContext, subject, notesData?.title]);
   const data = notesData;
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number; label?: string } | null>(null);
   const [showVisuals, setShowVisuals] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyStatus, setVerifyStatus] = useState<null | { ok: true } | { ok: false; attempts: number }>(null);
@@ -89,18 +90,91 @@ export default function Notes() {
     }
     setLoading(true);
     setVerifyStatus(null);
-    const res = await generateNotes(material, { subject, examLevel, examBoard });
-    setLoading(false);
-    if (res.error || !res.data) {
-      toast.error(res.error || 'Failed to generate notes');
+    setProgress({ done: 0, total: 1, label: 'Mapping the syllabus…' });
+
+    // Pass 1: outline — identify EVERY subtopic the exam expects.
+    const outlineRes = await generateNotesOutline(material, { subject, examLevel, examBoard });
+    if (outlineRes.error || !outlineRes.data || !Array.isArray(outlineRes.data.subtopics) || outlineRes.data.subtopics.length === 0) {
+      // Fallback to single-shot generator.
+      const res = await generateNotes(material, { subject, examLevel, examBoard });
+      setLoading(false);
+      setProgress(null);
+      if (res.error || !res.data) {
+        toast.error(res.error || 'Failed to generate notes');
+        return;
+      }
+      setNotesData(res.data);
+      awardXp(20);
+      toast.success('Notes ready!');
+      if (hallucinationCheckEnabled) void verifyAndRegenerate(res.data);
       return;
     }
-    setNotesData(res.data);
+
+    const outline = outlineRes.data;
+    const subtopics = outline.subtopics;
+
+    // Show outline shell immediately so the user sees structure forming.
+    setNotesData({
+      title: outline.title || `Notes: ${subject || 'Study material'}`,
+      overview: outline.overview,
+      sections: subtopics.map((s) => ({ heading: s.heading, body: '', bullets: [], examples: [] })),
+      keyTakeaways: outline.keyTakeaways || [],
+    });
+
+    setProgress({ done: 0, total: subtopics.length, label: `Writing ${subtopics.length} sections…` });
+
+    // Pass 2: generate each subtopic in parallel (limited concurrency).
+    const sections: NotesSection[] = new Array(subtopics.length);
+    const CONCURRENCY = 3;
+    let nextIdx = 0;
+    let completed = 0;
+    const worker = async () => {
+      while (true) {
+        const i = nextIdx++;
+        if (i >= subtopics.length) return;
+        const st = subtopics[i];
+        const r = await generateNotesSection({
+          content: material,
+          heading: st.heading,
+          scope: st.scope,
+          examPoints: st.examPoints,
+          subject,
+          examLevel,
+          examBoard,
+        });
+        sections[i] = r.data && !r.error
+          ? {
+              heading: r.data.heading || st.heading,
+              body: r.data.body || '',
+              bullets: Array.isArray(r.data.bullets) ? r.data.bullets : [],
+              examples: Array.isArray(r.data.examples) ? r.data.examples : [],
+            }
+          : { heading: st.heading, body: '', bullets: st.examPoints || [], examples: [] };
+        completed++;
+        setProgress({ done: completed, total: subtopics.length, label: `Writing section ${completed} of ${subtopics.length}…` });
+        // Live-update notes as sections finish.
+        setNotesData({
+          title: outline.title || `Notes: ${subject || 'Study material'}`,
+          overview: outline.overview,
+          sections: subtopics.map((s, idx) => sections[idx] || { heading: s.heading, body: '', bullets: [], examples: [] }),
+          keyTakeaways: outline.keyTakeaways || [],
+        });
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, subtopics.length) }, worker));
+
+    const finalNotes: NotesResult = {
+      title: outline.title || `Notes: ${subject || 'Study material'}`,
+      overview: outline.overview,
+      sections,
+      keyTakeaways: outline.keyTakeaways || [],
+    };
+    setNotesData(finalNotes);
+    setLoading(false);
+    setProgress(null);
     awardXp(20);
-    toast.success('Notes ready!');
-    if (hallucinationCheckEnabled) {
-      void verifyAndRegenerate(res.data);
-    }
+    toast.success(`Notes ready — ${sections.length} exam-aligned sections.`);
+    if (hallucinationCheckEnabled) void verifyAndRegenerate(finalNotes);
   };
 
   useEffect(() => {
@@ -226,7 +300,7 @@ export default function Notes() {
         </div>
 
         {loading ? (
-          <LoadingCard message="Writing your notes..." />
+          <LoadingCard message={progress ? `${progress.label || 'Working…'}${progress.total > 1 ? ` (${progress.done}/${progress.total})` : ''}` : 'Writing your notes...'} />
         ) : !data ? (
           <div className="glass-card rounded-xl p-8 text-center space-y-4">
             <p className="text-muted-foreground">

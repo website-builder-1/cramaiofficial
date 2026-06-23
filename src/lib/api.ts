@@ -282,6 +282,40 @@ export async function generateNotes(
   return apiRequest<NotesResult>('/api/notes/generate', withGrounding({ content, ...(context || {}) }));
 }
 
+export interface NotesOutlineSubtopic {
+  heading: string;
+  scope?: string;
+  examPoints?: string[];
+  priority?: 'core' | 'supporting';
+}
+
+export interface NotesOutline {
+  title: string;
+  overview?: string;
+  subtopics: NotesOutlineSubtopic[];
+  keyTakeaways?: string[];
+}
+
+export async function generateNotesOutline(
+  content: string,
+  context?: { subject?: string; examLevel?: string; examBoard?: string },
+): Promise<ApiResponse<NotesOutline>> {
+  return apiRequest<NotesOutline>('/api/notes/outline', withGrounding({ content, ...(context || {}) }));
+}
+
+export async function generateNotesSection(params: {
+  content: string;
+  heading: string;
+  scope?: string;
+  examPoints?: string[];
+  avoidClaims?: string[];
+  subject?: string;
+  examLevel?: string;
+  examBoard?: string;
+}): Promise<ApiResponse<NotesSection>> {
+  return apiRequest<NotesSection>('/api/notes/section', withGrounding({ ...params }));
+}
+
 // Image generation via HuggingFace (proxied)
 export async function generateConceptImage(prompt: string): Promise<ApiResponse<{ image: string; model?: string }>> {
   return apiRequest<{ image: string; model?: string }>('/api/image/generate', { prompt });
