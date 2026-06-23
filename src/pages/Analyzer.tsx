@@ -23,7 +23,7 @@ import {
   ImageIcon,
 } from 'lucide-react';
 import { useStudyStore } from '@/lib/store';
-import { analyzeDocument, type AnalysisResult } from '@/lib/api';
+import { analyzeDocument, extractSubtopicsFromImages, type AnalysisResult } from '@/lib/api';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { RichText } from '@/components/RichText';
@@ -100,6 +100,8 @@ export default function Analyzer() {
   } = useStudyStore();
   const awardXp = useStudyStore((s) => s.awardXp);
   const setLastContext = useStudyStore((s) => s.setLastContext);
+  const setOcrSubtopics = useStudyStore((s) => s.setOcrSubtopics);
+  const ocrSubtopics = useStudyStore((s) => s.ocrSubtopics);
 
   useEffect(() => {
     setLastContext('/analyzer', { label: `Analyzer: ${subject || 'study material'}` });
@@ -199,13 +201,27 @@ export default function Analyzer() {
     // New analysis = wipe everything generated from prior material
     resetGeneratedContent();
 
-    const response = await analyzeDocument(
-      content,
-      subject,
-      examLevel,
-      examBoard,
-      images.map((i) => i.dataUrl),
-    );
+    // Run document analysis and (when images are present) OCR-based subtopic
+    // extraction in parallel. The detected subtopics seed the Notes outline.
+    const imageUrls = images.map((i) => i.dataUrl);
+    const [response, ocrRes] = await Promise.all([
+      analyzeDocument(content, subject, examLevel, examBoard, imageUrls),
+      imageUrls.length
+        ? extractSubtopicsFromImages({ images: imageUrls, subject, examLevel, examBoard })
+        : Promise.resolve(null),
+    ]);
+
+    if (ocrRes?.data?.subtopics?.length) {
+      const cleaned = ocrRes.data.subtopics
+        .filter((s) => s && typeof s.heading === 'string' && s.heading.trim().length > 0)
+        .map((s) => ({ heading: s.heading.trim(), scope: s.scope?.trim() }));
+      setOcrSubtopics(cleaned);
+      if (cleaned.length) {
+        toast.success(`Detected ${cleaned.length} subtopic${cleaned.length === 1 ? '' : 's'} from your image${imageUrls.length === 1 ? '' : 's'}.`);
+      }
+    } else {
+      setOcrSubtopics([]);
+    }
     
     if (response.error) {
       toast.error(response.error);
@@ -413,6 +429,29 @@ export default function Analyzer() {
                 ))}
               </div>
             </div>
+
+            {ocrSubtopics.length > 0 && (
+              <div className="glass-card rounded-xl p-6">
+                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+                  <ImageIcon className="w-5 h-5 text-primary" />
+                  Detected from your image ({ocrSubtopics.length})
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  These subtopics were OCR'd from your uploaded image(s) and will be used as the authoritative section list when you generate notes.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {ocrSubtopics.map((s, i) => (
+                    <span
+                      key={i}
+                      title={s.scope || ''}
+                      className="px-3 py-1.5 rounded-full bg-primary/10 text-foreground border border-primary/20 text-sm font-medium"
+                    >
+                      {s.heading}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Definitions */}
             <div className="glass-card rounded-xl p-6">
